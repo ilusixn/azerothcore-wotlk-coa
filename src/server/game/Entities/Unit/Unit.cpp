@@ -16,6 +16,7 @@
  */
 
 #include "Unit.h"
+#include "AscensionSpellCopy.h"
 #include "AscensionIncarnation.h"
 #include "AbstractFollower.h"
 #include "AreaDefines.h"
@@ -5661,6 +5662,9 @@ void Unit::RemoveAppliedAuras(uint32 spellId, std::function<bool(AuraApplication
 
 void Unit::RemoveAurasDueToSpell(uint32 spellId, ObjectGuid casterGUID, uint8 reqEffMask, AuraRemoveMode removeMode)
 {
+    if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+        if (m_appliedAuras.find(spellId) == m_appliedAuras.end())
+            spellId = copy;
     for (AuraApplicationMap::iterator iter = m_appliedAuras.lower_bound(spellId); iter != m_appliedAuras.upper_bound(spellId);)
     {
         Aura const* aura = iter->second->GetBase();
@@ -6293,6 +6297,8 @@ AuraEffect* Unit::GetAuraEffect(uint32 spellId, uint8 effIndex, ObjectGuid caste
             return itr->second->GetBase()->GetEffect(effIndex);
         }
     }
+    if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+        return GetAuraEffect(copy, effIndex, caster);
     return nullptr;
 }
 
@@ -6347,6 +6353,8 @@ AuraEffect* Unit::GetAuraEffectDummy(uint32 spellid) const
             return *itr;
     }
 
+    if (uint32 copy = GetAscensionSpellCopy(spellid)) // Bronzebeard copy (vanilla classes)
+        return GetAuraEffectDummy(copy);
     return nullptr;
 }
 
@@ -6372,6 +6380,9 @@ AuraApplication* Unit::GetAuraApplication(uint32 spellId, ObjectGuid casterGUID,
 Aura* Unit::GetAura(uint32 spellId, ObjectGuid casterGUID, ObjectGuid itemCasterGUID, uint8 reqEffMask) const
 {
     AuraApplication* aurApp = GetAuraApplication(spellId, casterGUID, itemCasterGUID, reqEffMask);
+    if (!aurApp)
+        if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+            aurApp = GetAuraApplication(copy, casterGUID, itemCasterGUID, reqEffMask);
     return aurApp ? aurApp->GetBase() : nullptr;
 }
 
@@ -6384,6 +6395,8 @@ AuraApplication* Unit::GetAuraApplicationOfRankedSpell(uint32 spellId, ObjectGui
             return aurApp;
         rankSpell = sSpellMgr->GetNextSpellInChain(rankSpell);
     }
+    if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+        return GetAuraApplicationOfRankedSpell(copy, casterGUID, itemCasterGUID, reqEffMask, except);
     return nullptr;
 }
 
@@ -6468,6 +6481,8 @@ bool Unit::HasAuraEffect(uint32 spellId, uint8 effIndex, ObjectGuid caster) cons
             return true;
         }
     }
+    if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+        return HasAuraEffect(copy, effIndex, caster);
     return false;
 }
 
@@ -6484,6 +6499,9 @@ uint32 Unit::GetAuraCount(uint32 spellId) const
             count += (uint32)itr->second->GetBase()->GetStackAmount();
     }
 
+    if (!count)
+        if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+            return GetAuraCount(copy);
     return count;
 }
 
@@ -6514,6 +6532,8 @@ bool Unit::HasAura(uint32 spellId, ObjectGuid casterGUID, ObjectGuid itemCasterG
 {
     if (GetAuraApplication(spellId, casterGUID, itemCasterGUID, reqEffMask))
         return true;
+    if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
+        return GetAuraApplication(copy, casterGUID, itemCasterGUID, reqEffMask) != nullptr;
     return false;
 }
 

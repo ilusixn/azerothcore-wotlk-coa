@@ -6968,6 +6968,46 @@ void RefreshAscensionIncarnationDisplay(Player* player)
             player->SetDisplayId(model);
 }
 
+// Custom race looks ---------------------------------------------------------------------------
+static std::unordered_map<uint32, std::vector<uint32>> CustomRaceDisplays; // (race << 8 | gender) -> looks
+
+static void LoadCustomRaceDisplays()
+{
+    CustomRaceDisplays.clear();
+    QueryResult result = WorldDatabase.Query("SELECT race, gender, displayId FROM custom_race_display ORDER BY race, gender, idx");
+    if (!result)
+        return;
+
+    uint32 count = 0;
+    do
+    {
+        Field* fields = result->Fetch();
+        CustomRaceDisplays[(fields[0].Get<uint32>() << 8) | fields[1].Get<uint32>()].push_back(fields[2].Get<uint32>());
+        ++count;
+    } while (result->NextRow());
+    LOG_INFO("server.loading", ">> Loaded {} custom race looks", count);
+}
+
+uint32 GetAscensionCustomRaceDisplay(Player const* player)
+{
+    if (!player)
+        return 0;
+
+    auto const itr = CustomRaceDisplays.find((uint32(player->getRace(true)) << 8) | player->getGender());
+    if (itr == CustomRaceDisplays.end() || itr->second.empty())
+        return 0;
+
+    return itr->second[player->GetByteValue(PLAYER_BYTES, 0) % itr->second.size()];
+}
+
+class AscensionCustomRaceDisplayWorldScript : public WorldScript
+{
+public:
+    AscensionCustomRaceDisplayWorldScript() : WorldScript("AscensionCustomRaceDisplayWorldScript", { WORLDHOOK_ON_STARTUP }) { }
+
+    void OnStartup() override { LoadCustomRaceDisplays(); }
+};
+
 void AddAscensionCompatScripts() {
   RegisterAscensionClientConfig([](AscensionClientConfig& config) {
     config.Booleans.emplace_back("CONFIG_CHARACTER_ADVANCEMENT_BUILD_INSPECT_ENABLED", true);
@@ -6995,4 +7035,5 @@ void AddAscensionCompatScripts() {
   new AscensionCompatAllCreatureScript();
   new AscensionIncarnationPetScript();
   new AscensionIncarnationCreatureScript();
+  new AscensionCustomRaceDisplayWorldScript();
 }

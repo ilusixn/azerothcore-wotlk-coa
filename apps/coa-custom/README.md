@@ -86,7 +86,8 @@ It then asks which races the bots use:
 Existing bots keep their race; `CoA-Bots\Purge-Bots.bat` recreates them all with the new choice.
 
 To switch the bot count or races later without reinstalling, run `CoA-Custom\files\bots\Bots-Settings.bat`:
-it asks the same two questions and rewrites `CoA-Bots\Core\configs\modules\playerbots.conf`. Restart the server afterwards.
+it asks the same two questions and rewrites
+`CoA-Bots\Core\configs\modules\playerbots.conf`. Restart the server afterwards.
 
 **Back up first** (the installer also backs up your accounts and characters, but a full copy is safest):
 1. Stop the server with `Stop_All_Server.bat`.

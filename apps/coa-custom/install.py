@@ -168,8 +168,9 @@ HIDDEN_RACES = '19,27,65,72,77'                  # hidden from creation: old Vul
 BOT_RACES = {
     'vanilla': HIDDEN_RACES + ',' + ','.join(str(race) for race in range(32, 128)),  # the original races only
     # every race but the retail-converted models that crash the client when bots spawn around you (Kul Tiran 16,
-    # Furbolg 50, Mechagnome 67, Thin Human 32, Highmountain 66, Earthen 68/69, Haranir 70/71, Vulpera 74)
-    'custom': HIDDEN_RACES + ',16,50,67,32,66,68,69,70,71,74',
+    # Furbolg 50, Mechagnome 67, Thin Human 32, Highmountain 66, Earthen 68/69, Haranir 70/71, Vulpera 74) and
+    # the races 52, 53, 80 and 81
+    'custom': HIDDEN_RACES + ',16,50,67,32,66,68,69,70,71,74,52,53,80,81',
 }
 BOT_RACE_ALIASES = {'1': 'vanilla', '2': 'custom', 'normal': 'vanilla', 'modded': 'custom'}
 

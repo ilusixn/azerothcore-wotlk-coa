@@ -3576,8 +3576,23 @@ void Spell::EffectEnchantItemTmp(SpellEffIndex effIndex)
                 spell_id = 36760;
                 break;               // 20%
             default:
-                LOG_ERROR("spells.effect", "Spell::EffectEnchantItemTmp: Damage {} not handled in S'RW", damage);
-                return;
+                if (damage <= 3)
+                    spell_id = 36744;
+                else if (damage <= 4)
+                    spell_id = 36753;
+                else if (damage <= 5)
+                    spell_id = 36751;
+                else if (damage <= 6)
+                    spell_id = 36754;
+                else if (damage <= 7)
+                    spell_id = 36755;
+                else if (damage <= 9)
+                    spell_id = 36761;
+                else if (damage == 10)
+                    spell_id = 36758;
+                else
+                    spell_id = 36760;
+                break;
         }
 
         SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spell_id);

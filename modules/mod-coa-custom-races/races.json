@@ -1,0 +1,770 @@
+[
+  {
+    "id": 9,
+    "name": "Goblin",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Goblin; learns the Orc racial skill lines",
+    "client": "1.8.2"
+  },
+  {
+    "id": 12,
+    "name": "Zandalari Troll",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 13,
+    "name": "Worgen",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 14,
+    "name": "High Elf",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 15,
+    "name": "Tuskarr",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 16,
+    "name": "Kul Tiran",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 17,
+    "name": "Taunka",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 18,
+    "name": "Vrykul",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 19,
+    "name": "Vulpera",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": false,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 20,
+    "name": "Pandaren",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 21,
+    "name": "Naga",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 22,
+    "name": "Broken",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "male: only face 2 works",
+    "client": "1.8.2"
+  },
+  {
+    "id": 23,
+    "name": "Fel Orc",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 24,
+    "name": "Forest Troll",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 25,
+    "name": "Ice Troll",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 26,
+    "name": "Skeleton",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 27,
+    "name": "Earthen",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": false,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 28,
+    "name": "Drakkari Troll",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 29,
+    "name": "Pandaren",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 30,
+    "name": "Murloc",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 31,
+    "name": "Murloc",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 32,
+    "name": "Forgotten",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": true,
+    "notes": "crashes a client that sees it (1.7 report); name changed to Forgotten in 1.8.1; Thin Human before 1.8.1",
+    "client": "1.8.2"
+  },
+  {
+    "id": 47,
+    "name": "Alpha Worgen",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 48,
+    "name": "Dark Iron Dwarf",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 49,
+    "name": "Mag'har Orc",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 50,
+    "name": "Furbolg",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 51,
+    "name": "Undead Gnome",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 53,
+    "name": "Ogre",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "the female shows the male model (1.7 report)",
+    "client": "1.8.2"
+  },
+  {
+    "id": 54,
+    "name": "Dracthyr",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 55,
+    "name": "Eredar",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 56,
+    "name": "Harpy",
+    "faction": "horde",
+    "sexes": [
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "female only since 1.8.1",
+    "client": "1.8.2"
+  },
+  {
+    "id": 57,
+    "name": "Alpha Goblin",
+    "faction": "horde",
+    "sexes": [
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "the male has no head (1.7 report), bots are female only",
+    "client": "1.8.2"
+  },
+  {
+    "id": 58,
+    "name": "Dracthyr",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 59,
+    "name": "Void Elf",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 60,
+    "name": "Illidari Blood Elf",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 61,
+    "name": "Illidari Night Elf",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 62,
+    "name": "Lightforged Draenei",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 63,
+    "name": "Nightborne",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 65,
+    "name": "Test Race",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": false,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 66,
+    "name": "Highmountain Tauren",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 67,
+    "name": "Mechagnome",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 68,
+    "name": "Earthen",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 69,
+    "name": "Earthen",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 70,
+    "name": "Haranir",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 71,
+    "name": "Haranir",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 74,
+    "name": "Vulpera",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 79,
+    "name": "Arakkoa",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 80,
+    "name": "Darkfallen",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": false,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 81,
+    "name": "Darkfallen",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": false,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 82,
+    "name": "Sethrak",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": true,
+    "notes": "crashed at its first login with client 1.7",
+    "client": "1.8.2"
+  },
+  {
+    "id": 83,
+    "name": "Gnoll",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 97,
+    "name": "Saberon",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": false,
+    "clientCrash": true,
+    "notes": "crashes a client that sees it when cross-viewed (1.7 report); start zone Shadowglen, Night Elf cinematic",
+    "client": "1.8.2"
+  },
+  {
+    "id": 98,
+    "name": "Drakonid",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 99,
+    "name": "Drakkin",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 100,
+    "name": "Drakonid",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  },
+  {
+    "id": 103,
+    "name": "Grummle",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "",
+    "client": "1.8.2"
+  }
+]

@@ -1,0 +1,43 @@
+[worldserver]
+
+###################################################################################################
+# CoA Custom Races
+###################################################################################################
+
+#
+#    CoACustomRaces.Enable
+#        Description: Master switch for the CoA Custom races and their features (races above 11, the Esteria
+#                     appearance, racials, start zones, .hidearmor, the free talent reset). Read once at startup.
+#        Default:     0 - Disabled, the server behaves like the upstream core
+#                     1 - Enabled
+#
+
+CoACustomRaces.Enable = 0
+
+#
+#    CoACustomRaces.DbcDirectory
+#        Description: Directory with the server DBC files of the custom races, relative to DataDir. A DBC found
+#                     there replaces the one in DataDir/dbc. Only used when CoACustomRaces.Enable = 1.
+#        Default:     "dbc_races"
+#
+
+CoACustomRaces.DbcDirectory = "dbc_races"
+
+#
+#    CoACustomRaces.BotsEnable
+#        Description: Lets random bots (mod-playerbots) create characters of the custom races. Read by the bots
+#                     module; nothing in the core uses it.
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+CoACustomRaces.BotsEnable = 0
+
+#
+#    CoACustomRaces.DisabledRaces
+#        Description: Comma-separated race ids that stay unavailable even when CoACustomRaces.Enable = 1
+#                     (for example races whose client model still crashes). Empty = none.
+#        Default:     ""
+#
+
+CoACustomRaces.DisabledRaces = ""

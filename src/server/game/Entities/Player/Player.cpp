@@ -16,6 +16,7 @@
  */
 
 #include "Player.h"
+#include "CoACustomRaces.h"
 #include "AccountMgr.h"
 #include "AchievementMgr.h"
 #include "AreaDefines.h"
@@ -599,6 +600,16 @@ bool Player::Create(ObjectGuid::LowType guidlow, CharacterCreateInfo* createInfo
                                     (0x00 << 16) |
                                     (((GetSession()->IsARecruiter() || GetSession()->GetRecruiterId() != 0) ? REST_STATE_RAF_LINKED : REST_STATE_NOT_RAF_LINKED) << 24)));
     SetByteValue(PLAYER_BYTES_3, 0, createInfo->Gender);
+    if (CoACustomRaces::UsesExtraAppearance(createInfo->Race))
+    {
+        if (CoACustomRaces::UsesExtendedAppearance(createInfo->Race))
+            SetByteValue(UNIT_FIELD_PADDING, 0, createInfo->OutfitId);
+        else
+        {
+            SetUInt32Value(UNIT_FIELD_PADDING, uint32(createInfo->HaranirExtra));
+            SetUInt32Value(OBJECT_FIELD_PADDING, uint32(createInfo->HaranirExtra >> 32));
+        }
+    }
     SetByteValue(PLAYER_BYTES_3, 3, 0);                     // BattlefieldArenaFaction (0 or 1)
 
     SetUInt32Value(PLAYER_GUILDID, 0);
@@ -1354,6 +1365,7 @@ bool Player::BuildEnumData(PreparedQueryResult result, WorldPacket* data)
     *data << uint32(petFamily);
 
     std::vector<std::string_view> equipment = Acore::Tokenize(fields[22].Get<std::string_view>(), ' ', false);
+    bool const weaponsOnly = CoACustomRaces::HasCustomDisplay(plrRace, gender);
     for (uint8 slot = 0; slot < INVENTORY_SLOT_BAG_END; ++slot)
     {
         uint32 const visualBase = slot * 2;
@@ -1362,6 +1374,8 @@ bool Player::BuildEnumData(PreparedQueryResult result, WorldPacket* data)
         if (visualBase < equipment.size())
         {
             itemId = Acore::StringTo<uint32>(equipment[visualBase]);
+            if (weaponsOnly && slot != EQUIPMENT_SLOT_MAINHAND && slot != EQUIPMENT_SLOT_OFFHAND && slot != EQUIPMENT_SLOT_RANGED)
+                itemId = 0u;
         }
 
         ItemTemplate const* proto = nullptr;
@@ -11336,6 +11350,16 @@ void Player::InitDisplayIds()
             LOG_ERROR("entities.player", "Invalid gender {} for player", gender);
             return;
     }
+
+    if (CoACustomRaces::IsEnabled() && !CoACustomRaces::IsStockRace(getRace(true)))
+        SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);
+
+    if (uint32 customDisplay = CoACustomRaces::CustomDisplay(this))
+    {
+        SetDisplayId(customDisplay);
+        SetNativeDisplayId(customDisplay);
+        SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);
+    }
 }
 
 inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 count, uint8 bag, uint8 slot, int32 price, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
@@ -12766,6 +12790,9 @@ void Player::learnQuestRewardedSpells()
 
 void Player::learnSkillRewardedSpells(uint32 skill_id, uint32 skill_value)
 {
+    if (CoACustomRaces::HasOwnRacials(getRace()) && CoACustomRaces::IsVanillaRacialSkill(skill_id))
+        return;
+
     uint32 raceMask  = getRaceMask();
     uint32 classMask = getClassMask();
 
@@ -16076,6 +16103,14 @@ void Player::_SaveCharacter(bool create, CharacterDatabaseTransaction trans)
     }
 
     trans->Append(stmt);
+
+    if (CoACustomRaces::UsesExtraAppearance(getRace(true)))
+    {
+        uint64 extra = GetByteValue(UNIT_FIELD_PADDING, 0);
+        if (CoACustomRaces::UsesHaranirAppearance(getRace(true)))
+            extra = uint64(GetUInt32Value(UNIT_FIELD_PADDING)) | (uint64(GetUInt32Value(OBJECT_FIELD_PADDING)) << 32);
+        trans->Append("UPDATE characters SET extraAppearance = {} WHERE guid = {}", extra, GetGUID().GetCounter());
+    }
 }
 
 void Player::_LoadGlyphs(PreparedQueryResult result)

@@ -5,6 +5,7 @@
  */
 
 #include "AccountMgr.h"
+#include "CoACustomRaces.h"
 #include "AscensionFelsworn.h"
 #include "AscensionItemScaling.h"
 #include "AscensionPyromancer.h"
@@ -739,6 +740,8 @@ std::vector<uint32> GetAscensionRacialSpells(Player const* player)
             for (SkillLineAbilityEntry const* ability : GetSkillLineAbilitiesBySkillLine(skill.SkillId))
                 if (AscensionRacialAbilities::CanLearn(*ability, player->getRace(), player->getClass()))
                     spells.push_back(ability->Spell);
+
+    CoACustomRaces::AppendRacialSpells(player->getRace(), spells);
 
     std::sort(spells.begin(), spells.end());
     spells.erase(std::unique(spells.begin(), spells.end()), spells.end());

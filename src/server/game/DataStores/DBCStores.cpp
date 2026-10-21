@@ -16,6 +16,7 @@
  */
 
 #include "DBCStores.h"
+#include "CoACustomRaces.h"
 #include "BattlegroundMgr.h"
 #include "DBCFileLoader.h"
 #include "DBCfmt.h"
@@ -227,6 +228,8 @@ static bool LoadDBC_assert_print(uint32 fsize, uint32 rsize, std::string const& 
     return false;
 }
 
+static std::string sDbcOverridePath;
+
 template<class T>
 inline void LoadDBC(uint32& availableDbcLocales, StoreProblemList& errors, DBCStorage<T>& storage, std::string const& dbcPath, std::string const& filename, char const* dbTable = nullptr)
 {
@@ -235,6 +238,8 @@ inline void LoadDBC(uint32& availableDbcLocales, StoreProblemList& errors, DBCSt
 
     ++DBCFileCount;
     std::string dbcFilename = dbcPath + filename;
+    if (!sDbcOverridePath.empty() && std::filesystem::exists(sDbcOverridePath + filename))
+        dbcFilename = sDbcOverridePath + filename;
     bool existDBData = false;
 
     if (storage.Load(dbcFilename.c_str()))
@@ -286,6 +291,11 @@ void LoadDBCStores(std::string const& dataPath)
 
     std::string dbcPath = dataPath + "dbc/";
     sDBCPath = dbcPath;
+    if (CoACustomRaces::IsEnabled())
+    {
+        sDbcOverridePath = dataPath + CoACustomRaces::DbcDirectory() + "/";
+        LOG_INFO("server.loading", "CoA Custom Races: DBC files of {} replace the stock ones", sDbcOverridePath);
+    }
 
     StoreProblemList bad_dbc_files;
     uint32 availableDbcLocales = 0xFFFFFFFF;
@@ -728,6 +738,8 @@ void LoadDBCStores(std::string const& dataPath)
 
 std::string GetClientDBCPath(std::string_view fileName)
 {
+    if (!sDbcOverridePath.empty() && std::filesystem::exists(sDbcOverridePath + std::string(fileName)))
+        return sDbcOverridePath + std::string(fileName);
     return sDBCPath + std::string(fileName);
 }
 
@@ -1006,7 +1018,7 @@ SkillRaceClassInfoEntry const* GetSkillRaceClassInfo(uint32 skill, uint8 race, u
     SkillRaceClassInfoBounds bounds = SkillRaceClassInfoBySkill.equal_range(skill);
     for (SkillRaceClassInfoMap::iterator itr = bounds.first; itr != bounds.second; ++itr)
     {
-        if (itr->second->RaceMask && !(itr->second->RaceMask & (1 << (race - 1))))
+        if (itr->second->RaceMask && !(itr->second->RaceMask & (1u << ((race - 1) & 31))))
         {
             continue;
         }

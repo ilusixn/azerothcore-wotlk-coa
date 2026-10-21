@@ -16,6 +16,7 @@
  */
 
 #include "ObjectMgr.h"
+#include "CoACustomRaces.h"
 #include "AchievementMgr.h"
 #include "ArenaTeamMgr.h"
 #include "CharacterCache.h"
@@ -4448,6 +4449,9 @@ void ObjectMgr::LoadPlayerInfo()
                 float  positionZ     = fields[6].Get<float>();
                 float  orientation   = fields[7].Get<float>();
 
+                if (!CoACustomRaces::IsEnabled() && !CoACustomRaces::IsStockRace(current_race))
+                    continue;
+
                 if (current_race >= sRaceMgr->GetMaxRaces())
                 {
                     LOG_ERROR("sql.sql", "Wrong race {} in `playercreateinfo` table, ignoring.", current_race);
@@ -4526,6 +4530,9 @@ void ObjectMgr::LoadPlayerInfo()
                 Field* fields = result->Fetch();
 
                 uint32 current_race = fields[0].Get<uint8>();
+                if (!CoACustomRaces::IsEnabled() && !CoACustomRaces::IsStockRace(current_race))
+                    continue;
+
                 if (current_race >= sRaceMgr->GetMaxRaces())
                 {
                     LOG_ERROR("sql.sql", "Wrong race {} in `playercreateinfo_item` table, ignoring.", current_race);
@@ -4626,7 +4633,8 @@ void ObjectMgr::LoadPlayerInfo()
 
                 for (uint32 raceIndex = RACE_HUMAN; raceIndex < sRaceMgr->GetMaxRaces(); ++raceIndex)
                 {
-                    if (raceMask == 0 || ((1 << (raceIndex - 1)) & raceMask))
+                    bool const customRaceClassSkill = CoACustomRaces::IsEnabled() && !CoACustomRaces::IsStockRace(raceIndex) && raceMask != 0 && classMask != 0;
+                    if (raceMask == 0 || customRaceClassSkill || ((1u << ((raceIndex - 1) & 31)) & raceMask))
                     {
                         for (uint32 classIndex = CLASS_WARRIOR; classIndex < MAX_CLASSES; ++classIndex)
                         {
@@ -4687,7 +4695,10 @@ void ObjectMgr::LoadPlayerInfo()
 
                 for (uint32 raceIndex = RACE_HUMAN; raceIndex < sRaceMgr->GetMaxRaces(); ++raceIndex)
                 {
-                    if (raceMask == 0 || ((1 << (raceIndex - 1)) & raceMask))
+                    if (raceMask != 0 && raceIndex > 32)
+                        continue;
+
+                    if (raceMask == 0 || ((1u << ((raceIndex - 1) & 31)) & raceMask))
                     {
                         for (uint32 classIndex = CLASS_WARRIOR; classIndex < MAX_CLASSES; ++classIndex)
                         {
@@ -4703,6 +4714,23 @@ void ObjectMgr::LoadPlayerInfo()
                     }
                 }
             } while (result->NextRow());
+
+            if (CoACustomRaces::IsEnabled())
+                for (uint32 raceIndex = RACE_HUMAN; raceIndex < sRaceMgr->GetMaxRaces(); ++raceIndex)
+                {
+                    if (CoACustomRaces::IsStockRace(raceIndex))
+                        continue;
+
+                    std::vector<uint32> racials;
+                    CoACustomRaces::AppendRacialSpells(raceIndex, racials);
+                    for (uint32 classIndex = CLASS_WARRIOR; classIndex < MAX_CLASSES; ++classIndex)
+                        if (PlayerInfo* info = _playerInfo[raceIndex][classIndex])
+                            for (uint32 spell : racials)
+                            {
+                                info->customSpells.push_back(spell);
+                                ++count;
+                            }
+                }
 
             LOG_INFO("server.loading", ">> Loaded {} Custom Player Create Spells in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
             LOG_INFO("server.loading", " ");
@@ -4745,7 +4773,7 @@ void ObjectMgr::LoadPlayerInfo()
 
                 for (uint32 raceIndex = RACE_HUMAN; raceIndex < sRaceMgr->GetMaxRaces(); ++raceIndex)
                 {
-                    if (raceMask == 0 || ((1 << (raceIndex - 1)) & raceMask))
+                    if (raceMask == 0 || ((1u << ((raceIndex - 1) & 31)) & raceMask))
                     {
                         for (uint32 classIndex = CLASS_WARRIOR; classIndex < MAX_CLASSES; ++classIndex)
                         {
@@ -4789,6 +4817,9 @@ void ObjectMgr::LoadPlayerInfo()
                 Field* fields = result->Fetch();
 
                 uint32 current_race = fields[0].Get<uint8>();
+                if (!CoACustomRaces::IsEnabled() && !CoACustomRaces::IsStockRace(current_race))
+                    continue;
+
                 if (current_race >= sRaceMgr->GetMaxRaces())
                 {
                     LOG_ERROR("sql.sql", "Wrong race {} in `playercreateinfo_action` table, ignoring.", current_race);
@@ -4842,6 +4873,9 @@ void ObjectMgr::LoadPlayerInfo()
             Field* fields = raceStatsResult->Fetch();
 
             uint32 current_race = fields[0].Get<uint8>();
+            if (!CoACustomRaces::IsEnabled() && !CoACustomRaces::IsStockRace(current_race))
+                continue;
+
             if (current_race >= sRaceMgr->GetMaxRaces())
             {
                 LOG_ERROR("sql.sql", "Wrong race {} in `player_race_stats` table, ignoring.", current_race);
@@ -9836,7 +9870,7 @@ int32 ObjectMgr::GetBaseReputationOf(FactionEntry const* factionEntry, uint8 rac
     if (!factionEntry)
         return 0;
 
-    uint32 raceMask = (1 << (race - 1));
+    uint32 raceMask = (1u << ((race - 1) & 31));
     uint32 classMask = (uint32(1) << (playerClass - 1));
 
     for (int i = 0; i < 4; i++)

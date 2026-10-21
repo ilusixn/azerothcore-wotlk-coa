@@ -49,6 +49,7 @@
 #include "OutdoorPvP.h"
 #include "Pet.h"
 #include "Player.h"
+#include "CoACustomRaces.h"
 #include "QueryHolder.h"
 #include "QuestDef.h"
 #include "RBAC.h"
@@ -5156,6 +5157,18 @@ bool Player::LoadFromDB(ObjectGuid playerGuid, CharacterDatabaseQueryHolder cons
     SetByteValue(PLAYER_BYTES_2, 3, fields[15].Get<uint8>());
     SetByteValue(PLAYER_BYTES_3, 0, fields[5].Get<uint8>());
     SetByteValue(PLAYER_BYTES_3, 1, fields[54].Get<uint8>());
+    if (CoACustomRaces::UsesExtraAppearance(getRace(true)))
+        if (QueryResult extraResult = CharacterDatabase.Query("SELECT extraAppearance FROM characters WHERE guid = {}", guid))
+        {
+            uint64 const extra = (*extraResult)[0].Get<uint64>();
+            if (CoACustomRaces::UsesExtendedAppearance(getRace(true)))
+                SetByteValue(UNIT_FIELD_PADDING, 0, uint8(extra));
+            else
+            {
+                SetUInt32Value(UNIT_FIELD_PADDING, uint32(extra));
+                SetUInt32Value(OBJECT_FIELD_PADDING, uint32(extra >> 32));
+            }
+        }
     ReplaceAllPlayerFlags((PlayerFlags)fields[16].Get<uint32>());
 
     RemovePlayerFlag(PLAYER_FLAGS_NO_PLAY_TIME);

@@ -16,6 +16,7 @@
  */
 
 #include "AccountMgr.h"
+#include "CoACustomRaces.h"
 #include "AreaDefines.h"
 #include "RBAC.h"
 #include "ArenaTeamMgr.h"
@@ -225,6 +226,10 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
     WorldPacket data(SMSG_CHAR_ENUM, 100);                  // we guess size
 
     uint8 num = 0;
+    ByteBuffer extraAppearances;
+    uint32 extraCount = 0;
+    ByteBuffer haranirAppearances;
+    uint32 haranirCount = 0;
 
     data << num;
 
@@ -239,11 +244,37 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             {
                 _legitCharacters.insert(guid);
                 ++num;
+                if (uint8 const race = (*result)[2].Get<uint8>(); CoACustomRaces::UsesExtraAppearance(race))
+                {
+                    uint64 extra = 0;
+                    if (QueryResult extraResult = CharacterDatabase.Query("SELECT extraAppearance FROM characters WHERE guid = {}", guid.GetCounter()))
+                        extra = (*extraResult)[0].Get<uint64>();
+                    if (CoACustomRaces::UsesExtendedAppearance(race))
+                    {
+                        extraAppearances << guid.GetRawValue() << uint8(extra);
+                        ++extraCount;
+                    }
+                    else
+                    {
+                        haranirAppearances << guid.GetRawValue() << extra;
+                        ++haranirCount;
+                    }
+                }
             }
         } while (result->NextRow());
     }
 
     data.put<uint8>(0, num);
+    if (extraCount)
+    {
+        data.append(extraAppearances);
+        data << extraCount << uint32(0x31455848);
+    }
+    if (haranirCount)
+    {
+        data.append(haranirAppearances);
+        data << haranirCount << uint32(0x32455848);
+    }
 
     SendPacket(&data);
 }
@@ -279,6 +310,18 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recvData)
              >> createInfo->HairColor
              >> createInfo->FacialHair
              >> createInfo->OutfitId;
+
+    if (CoACustomRaces::IsEnabled() && CoACustomRaces::UsesHaranirAppearance(createInfo->Race))
+    {
+        uint32 magic = 0;
+        if (recvData.size() - recvData.rpos() == 12)
+            recvData >> createInfo->HaranirExtra >> magic;
+        if (magic != 0x31435248)
+        {
+            SendCharCreate(CHAR_CREATE_FAILED);
+            return;
+        }
+    }
 
     if (createInfo->Class == 10 && IsAscensionCompatEnabled() &&
         sConfigMgr->GetOption<bool>("CoA.MapClass10ToWarrior", false))

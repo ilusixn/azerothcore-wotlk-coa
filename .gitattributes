@@ -43,3 +43,4 @@ src/server/coa/AscensionCoATalentData.h -text
 src/server/coa/AscensionCustomClassData.h -text
 
 *.dbc binary
+*.png binary

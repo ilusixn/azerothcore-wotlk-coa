@@ -4812,6 +4812,16 @@ private:
             AscensionCompatConfig::CLIENT_DBC_DIRECTORY));
     if (!configuredDirectory.empty())
       return configuredDirectory;
+    if (CoACustomRaces::IsEnabled()) {
+      std::filesystem::path const racesDirectory =
+          std::filesystem::path(sWorld->GetDataPath()) /
+          CoACustomRaces::DbcDirectory() / "clientset";
+      if (std::filesystem::is_directory(racesDirectory)) {
+        LOG_INFO("coa", "CoA.ClientDbcDirectory is empty: using the custom races client DBC copy {}",
+                 racesDirectory.generic_string());
+        return racesDirectory;
+      }
+    }
     return std::filesystem::path(sWorld->GetDataPath()) / "dbc_clientset";
   }
 

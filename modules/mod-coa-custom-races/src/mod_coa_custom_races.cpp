@@ -52,6 +52,7 @@ void AddCoACustomRaceWeaponSkillScripts();
 void AddCoAFreeTalentResetScripts();
 void AddCoAHideArmorScripts();
 void AddSC_CoaEsteriaRacials();
+void LoadCoACustomRaceBotList(std::unordered_set<uint8> const& disabled);
 
 void Addmod_coa_custom_racesScripts()
 {
@@ -61,6 +62,8 @@ void Addmod_coa_custom_racesScripts()
     hooks.IsVanillaRacialSkill = IsCoaVanillaRacialSkill;
 
     LoadDisabledRaces();
+    if (CoACustomRaces::IsEnabled())
+        LoadCoACustomRaceBotList(DisabledRaces);
     LOG_INFO("server.loading", "CoA Custom Races: {}", CoACustomRaces::IsEnabled() ? "enabled" : "disabled");
 
     new CoACustomRacesAccount();

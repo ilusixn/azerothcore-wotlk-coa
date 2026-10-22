@@ -532,6 +532,26 @@ bool Player::Create(ObjectGuid::LowType guidlow, CharacterCreateInfo* createInfo
 
     m_name = createInfo->Name;
 
+    // Random bots only get the races the custom races module allows for them
+    if (GetSession()->IsBot() && CoACustomRaces::IsEnabled())
+    {
+        CoACustomRaces::BotCreation bot{ createInfo->Race, createInfo->Class, createInfo->Gender, createInfo->Skin, createInfo->Face,
+            createInfo->HairStyle, createInfo->HairColor, createInfo->FacialHair };
+        if (!CoACustomRaces::ChooseBotRace(bot))
+        {
+            LOG_ERROR("entities.player", "Player::Create: no race allowed for a bot of class {} (requested race {}) - refusing to do so.", createInfo->Class, createInfo->Race);
+            return false;
+        }
+
+        createInfo->Race = bot.race;
+        createInfo->Gender = bot.gender;
+        createInfo->Skin = bot.skin;
+        createInfo->Face = bot.face;
+        createInfo->HairStyle = bot.hairStyle;
+        createInfo->HairColor = bot.hairColor;
+        createInfo->FacialHair = bot.facialHair;
+    }
+
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(createInfo->Race, createInfo->Class);
     if (!info)
     {

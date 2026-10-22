@@ -25,8 +25,9 @@ CoACustomRaces.DbcDirectory = "dbc_races"
 
 #
 #    CoACustomRaces.BotsEnable
-#        Description: Lets random bots (mod-playerbots) create characters of the custom races. Read by the bots
-#                     module; nothing in the core uses it.
+#        Description: Lets random bots (mod-playerbots) get the custom races. 0 = bots only get the base races.
+#                     Even with 1, bots never get a race the races list marks botsOk = false or clientCrash = true,
+#                     nor one in DisabledRaces, nor a sex the list does not give that race.
 #        Default:     0 - Disabled
 #                     1 - Enabled
 #
@@ -41,3 +42,13 @@ CoACustomRaces.BotsEnable = 0
 #
 
 CoACustomRaces.DisabledRaces = ""
+
+#
+#    CoACustomRaces.RacesList
+#        Description: Path of races-list.json (the list of the custom races with botsOk, clientCrash, sexes).
+#                     Empty = DataDir/../Races/races-list.json, then ../../Races/races-list.json, then
+#                     Races/races-list.json. Without the file no custom race is given to bots.
+#        Default:     ""
+#
+
+CoACustomRaces.RacesList = ""

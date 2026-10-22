@@ -58,4 +58,10 @@ namespace CoACustomRaces
         if (IsEnabled() && hooks.AppendRacialSpells)
             hooks.AppendRacialSpells(race, spells);
     }
+
+    bool ChooseBotRace(BotCreation& bot)
+    {
+        Hooks const& hooks = GetHooks();
+        return !IsEnabled() || !hooks.ChooseBotRace || hooks.ChooseBotRace(bot);
+    }
 }

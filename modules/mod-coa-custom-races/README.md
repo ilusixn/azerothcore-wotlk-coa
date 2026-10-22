@@ -2,7 +2,7 @@
 
 Server side of **CoA Custom**: extra playable races for Conquest of Azeroth (AzerothCore CoA). With
 `CoACustomRaces.Enable = 0` (default) the server behaves like the upstream core. With `1` the races listed in
-`races.json` can be created and played with the matching client (`races-core-<version>`, the CoA Custom client zip).
+`races-list.json` can be created and played with the matching client (`races-core-<version>`, the CoA Custom client zip).
 
 ## Switches
 
@@ -10,8 +10,9 @@ Server side of **CoA Custom**: extra playable races for Conquest of Azeroth (Aze
 |---|---|---|
 | `CoACustomRaces.Enable` | `0` | `mod_coa_custom_races.conf` |
 | `CoACustomRaces.DbcDirectory` | `"dbc_races"` | relative to `DataDir` |
-| `CoACustomRaces.BotsEnable` | `0` | read by the bots module only |
-| `CoACustomRaces.DisabledRaces` | `""` | race ids kept unavailable while enabled |
+| `CoACustomRaces.BotsEnable` | `0` | `0` = bots only get the base races |
+| `CoACustomRaces.DisabledRaces` | `""` | race ids kept unavailable while enabled (players and bots) |
+| `CoACustomRaces.RacesList` | `""` | path of `races-list.json`; empty = `DataDir/../Races/races-list.json`, `../../Races/races-list.json`, `Races/races-list.json` |
 
 `Enable` is read once at startup, before the DBC files load.
 
@@ -41,8 +42,13 @@ and the 32-bit display ids of `PlayerInfo` (custom display ids go above 65535).
 `data/sql/db-world`, `db-characters`, `db-auth`: small, re-runnable (`DELETE` of exactly the keys, then `INSERT`),
 no database names. They only add rows for races above 11, spells `14000000-14009999` and `110000-111999`,
 `custom_race_display`, helper creatures and objects, Realm First criteria, the `characters.extraAppearance` column,
-`coa_hide_armor` and the RBAC permission. `2026_10_21_07_CHANGES_UPSTREAM_mastercraft_flames.sql` is the only file that
-touches an upstream row.
+`coa_hide_armor` and the RBAC permission. No file changes an upstream row. Every file is safe to run twice; a new change
+is a new file (`YYYY_MM_DD_NN_description.sql`), a published file is never edited.
+
+Known, for upstream: the Mechagnome racial Mastercraft summons gameobject `184911` under the player, and upstream's
+`go_flames` script on it burns whoever stands in it (it killed Mechagnomes). The fix is one upstream row
+(`UPDATE gameobject_template SET ScriptName = '' WHERE entry = 184911 AND ScriptName = 'go_flames'`); it was removed from
+this pack and has to come from the core's own data.
 
 Permissions (RBAC ids 6000-6099 only): `6001` Command: resettalents.
 
@@ -51,12 +57,17 @@ Permissions (RBAC ids 6000-6099 only): `6001` Command: resettalents.
 `dbc_races/` holds the server DBC files the custom races need (copy or point `DataDir` so that
 `DataDir/<DbcDirectory>` exists). A file found there replaces the one in `DataDir/dbc`. They match the CoA Custom
 client `1.8.2`. `dbc_races/clientset/CreatureDisplayInfo.dbc` is the unpatched client copy the CoA display-patch
-stream compares with: set `CoA.ClientDbcDirectory` to `<DataDir>/dbc_races/clientset` while the races are enabled.
+stream compares with: with `CoACustomRaces.Enable = 1` and an empty `CoA.ClientDbcDirectory`, the core uses
+`<DataDir>/<DbcDirectory>/clientset` by itself (logged once at start).
 
-## races.json
+## races-list.json
 
 One entry per race id the server accepts (`id`, `name`, `faction`, `sexes`, `playable`, `botsOk`, `clientCrash`,
-`notes`, `client`). The bots read it to exclude crashing, male-only and female-only races.
+`notes`, `client`). The server reads it for random bots: when `Player::Create` is called by a bot session, a race that is
+not `playable` / `botsOk`, is `clientCrash`, is in `DisabledRaces`, or any custom race while `BotsEnable = 0`, is replaced
+by an allowed race of the same faction that exists for the class (new face and hair drawn), and a sex the entry does not
+list is switched. It logs once `CoACustomRaces: N races allowed for bots (M blocked: ids)`. No change in mod-playerbots is
+needed. Without the file no custom race goes to bots.
 The `clientCrash` and `botsOk` values come from reports on client 1.7 and were not tested again with 1.8.2.
 
 ## Left out on purpose

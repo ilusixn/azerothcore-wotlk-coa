@@ -56,7 +56,7 @@ Permissions (RBAC ids 6000-6099 only): `6001` Command: resettalents.
 
 `dbc_races/` holds the server DBC files the custom races need (copy or point `DataDir` so that
 `DataDir/<DbcDirectory>` exists). A file found there replaces the one in `DataDir/dbc`. They match the CoA Custom
-client `1.8.2`. `dbc_races/clientset/CreatureDisplayInfo.dbc` is the unpatched client copy the CoA display-patch
+client `1.9.1`. `dbc_races/clientset/CreatureDisplayInfo.dbc` is the unpatched client copy the CoA display-patch
 stream compares with: with `CoACustomRaces.Enable = 1` and an empty `CoA.ClientDbcDirectory`, the core uses
 `<DataDir>/<DbcDirectory>/clientset` by itself (logged once at start).
 

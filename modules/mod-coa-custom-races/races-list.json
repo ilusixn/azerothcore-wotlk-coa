@@ -11,7 +11,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "Goblin; learns the Orc racial skill lines",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 12,
@@ -25,7 +25,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 13,
@@ -39,7 +39,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 14,
@@ -53,7 +53,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 15,
@@ -66,7 +66,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 16,
@@ -80,7 +80,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 17,
@@ -93,7 +93,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 18,
@@ -106,7 +106,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 19,
@@ -120,7 +120,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 20,
@@ -134,7 +134,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 21,
@@ -148,7 +148,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 22,
@@ -162,7 +162,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "male: only face 2 works",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 23,
@@ -175,7 +175,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 24,
@@ -188,7 +188,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 25,
@@ -201,7 +201,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 26,
@@ -214,7 +214,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 27,
@@ -228,7 +228,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 28,
@@ -242,7 +242,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 29,
@@ -256,7 +256,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 30,
@@ -270,7 +270,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 31,
@@ -284,7 +284,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 32,
@@ -297,7 +297,7 @@
     "botsOk": false,
     "clientCrash": true,
     "notes": "crashes a client that sees it (1.7 report); name changed to Forgotten in 1.8.1; Thin Human before 1.8.1",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 47,
@@ -311,7 +311,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 48,
@@ -325,7 +325,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 49,
@@ -339,7 +339,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 50,
@@ -352,7 +352,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 51,
@@ -366,7 +366,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 53,
@@ -380,7 +380,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "the female shows the male model (1.7 report)",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 54,
@@ -394,7 +394,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 55,
@@ -408,7 +408,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 56,
@@ -421,7 +421,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "female only since 1.8.1",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 57,
@@ -434,7 +434,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "the male has no head (1.7 report), bots are female only",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 58,
@@ -448,7 +448,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 59,
@@ -462,7 +462,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 60,
@@ -476,7 +476,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 61,
@@ -490,7 +490,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 62,
@@ -504,7 +504,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 63,
@@ -518,7 +518,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 65,
@@ -532,7 +532,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 66,
@@ -546,7 +546,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 67,
@@ -560,7 +560,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 68,
@@ -574,7 +574,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 69,
@@ -588,7 +588,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 70,
@@ -602,7 +602,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 71,
@@ -616,7 +616,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 74,
@@ -630,7 +630,21 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
+  },
+  {
+    "id": 75,
+    "name": "Centaur",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Centaur (Alliance); stands on top of its mount",
+    "client": "1.9"
   },
   {
     "id": 79,
@@ -644,7 +658,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 80,
@@ -658,7 +672,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 81,
@@ -672,7 +686,7 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 82,
@@ -686,7 +700,7 @@
     "botsOk": false,
     "clientCrash": true,
     "notes": "crashed at its first login with client 1.7",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 83,
@@ -699,7 +713,33 @@
     "botsOk": false,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
+  },
+  {
+    "id": 87,
+    "name": "Faceless One",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Faceless One, male only",
+    "client": "1.9"
+  },
+  {
+    "id": 90,
+    "name": "Banshee",
+    "faction": "horde",
+    "sexes": [
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Banshee, female only",
+    "client": "1.9"
   },
   {
     "id": 97,
@@ -712,7 +752,7 @@
     "botsOk": false,
     "clientCrash": true,
     "notes": "crashes a client that sees it when cross-viewed (1.7 report); start zone Shadowglen, Night Elf cinematic",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 98,
@@ -725,7 +765,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 99,
@@ -739,7 +779,7 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
   },
   {
     "id": 100,
@@ -752,7 +792,35 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
+  },
+  {
+    "id": 101,
+    "name": "Venthyr",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Venthyr",
+    "client": "1.9"
+  },
+  {
+    "id": 102,
+    "name": "Centaur",
+    "faction": "horde",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Centaur (Horde); stands on top of its mount",
+    "client": "1.9"
   },
   {
     "id": 103,
@@ -765,6 +833,86 @@
     "botsOk": true,
     "clientCrash": false,
     "notes": "",
-    "client": "1.8.2"
+    "client": "1.9"
+  },
+  {
+    "id": 104,
+    "name": "Slime Giant",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Slime Giant, male only",
+    "client": "1.9"
+  },
+  {
+    "id": 106,
+    "name": "Mantid",
+    "faction": "horde",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Mantid, male only",
+    "client": "1.9"
+  },
+  {
+    "id": 107,
+    "name": "Kyrian",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Kyrian",
+    "client": "1.9"
+  },
+  {
+    "id": 109,
+    "name": "Ethereal",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Ethereal, male only",
+    "client": "1.9"
+  },
+  {
+    "id": 110,
+    "name": "Sylvari",
+    "faction": "alliance",
+    "sexes": [
+      "male",
+      "female"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Sylvari (former Vorkai)",
+    "client": "1.9"
+  },
+  {
+    "id": 112,
+    "name": "Hozen",
+    "faction": "alliance",
+    "sexes": [
+      "male"
+    ],
+    "playable": true,
+    "botsOk": true,
+    "clientCrash": false,
+    "notes": "Hozen, male only",
+    "client": "1.9"
   }
 ]

@@ -8,6 +8,7 @@
 #include "RaceMgr.h"
 #include "Random.h"
 #include "World.h"
+#include <boost/bind/placeholders.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <filesystem>
 #include <map>

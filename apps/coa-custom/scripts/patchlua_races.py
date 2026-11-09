@@ -174,5 +174,28 @@ rep('''		CharCreateMaleButton:Show()
 		CharCreateFemaleButton:SetShown(not CharacterCreate_IsMaleOnlyRace())
 		CharCreateOkayButton:SetText(CUSTOMIZE);''')
 
+
+# the sex has to change before the native race change: SetSelectedRace() loads the model of the sex that is
+# selected now, and a single-sex race has no textures for the other one (the female Skeleton crashes the client)
+rep('''			SetSelectedRace(id);
+			SetCharacterRace(id);''', '''			local wantSex
+			if CharacterCreate_IsMaleOnlyRace(id) then
+				wantSex = SEX_MALE
+			elseif CharacterCreate_IsFemaleOnlyRace and CharacterCreate_IsFemaleOnlyRace(id) then
+				wantSex = SEX_FEMALE
+			end
+			if wantSex and GetSelectedSex() ~= wantSex then
+				local current = GetSelectedRace()
+				if CharacterCreate_IsMaleOnlyRace(current)
+					or (CharacterCreate_IsFemaleOnlyRace and CharacterCreate_IsFemaleOnlyRace(current)) then
+					SetSelectedRace(1)
+				end
+				SetSelectedSex(wantSex)
+				CharCreateMaleButton:SetChecked(wantSex == SEX_MALE and 1 or 0)
+				CharCreateFemaleButton:SetChecked(wantSex == SEX_FEMALE and 1 or 0)
+			end
+			SetSelectedRace(id);
+			SetCharacterRace(id);''')
+
 p.write_bytes(s.replace('\n',nl).encode('utf-8'))
 print('race buttons patched')

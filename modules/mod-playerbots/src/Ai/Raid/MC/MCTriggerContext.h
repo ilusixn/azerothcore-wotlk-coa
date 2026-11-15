@@ -1,0 +1,115 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#ifndef PLAYERBOTS_MCTRIGGERCONTEXT_H
+#define PLAYERBOTS_MCTRIGGERCONTEXT_H
+
+#include "BossAuraTriggers.h"
+#include "MCHelpers.h"
+#include "MCTriggers.h"
+#include "NamedObjectContext.h"
+#include "RaidBossScripts.h"
+
+class RaidMcTriggerContext : public NamedObjectContext<Trigger>
+{
+public:
+    RaidMcTriggerContext()
+    {
+        creators["mc lucifron shadow resistance"] = &RaidMcTriggerContext::lucifron_shadow_resistance;
+        creators["mc magmadar fire resistance"] = &RaidMcTriggerContext::magmadar_fire_resistance;
+        creators["mc gehennas shadow resistance"] = &RaidMcTriggerContext::gehennas_shadow_resistance;
+        creators["mc garr fire resistance"] = &RaidMcTriggerContext::garr_fire_resistance;
+        creators["mc baron geddon fire resistance"] = &RaidMcTriggerContext::baron_geddon_fire_resistance;
+        creators["mc living bomb debuff"] = &RaidMcTriggerContext::living_bomb_debuff;
+        creators["mc baron geddon inferno"] = &RaidMcTriggerContext::baron_geddon_inferno;
+        creators["mc shazzrah ranged"] = &RaidMcTriggerContext::shazzrah_ranged;
+        creators["mc shazzrah reflection"] = &RaidMcTriggerContext::shazzrah_reflection;
+        creators["mc shazzrah tank reflection"] = &RaidMcTriggerContext::shazzrah_tank_reflection;
+        creators["mc sacrificial chains"] = &RaidMcTriggerContext::sacrificial_chains;
+        creators["mc sulfuron harbinger fire resistance"] = &RaidMcTriggerContext::sulfuron_harbinger_fire_resistance;
+        creators["mc golemagg fire resistance"] = &RaidMcTriggerContext::golemagg_fire_resistance;
+        creators["mc golemagg mark boss"] = &RaidMcTriggerContext::golemagg_mark_boss;
+        creators["mc golemagg is main tank"] = &RaidMcTriggerContext::golemagg_is_main_tank;
+        creators["mc golemagg is assist tank"] = &RaidMcTriggerContext::golemagg_is_assist_tank;
+        creators["mc majordomo shadow resistance"] = &RaidMcTriggerContext::majordomo_shadow_resistance;
+        creators["mc ragnaros fire resistance"] = &RaidMcTriggerContext::ragnaros_fire_resistance;
+        creators["mc core hound mark"] = &RaidMcTriggerContext::core_hound_mark;
+        creators["mc in lava"] = &RaidMcTriggerContext::in_lava;
+        creators["mc golemagg magma splash"] = &RaidMcTriggerContext::golemagg_magma_splash;
+        creators["mc golemagg is healer"] = &RaidMcTriggerContext::golemagg_is_healer;
+        creators["mc majordomo damage shield"] = &RaidMcTriggerContext::majordomo_damage_shield;
+        creators["mc magmadar backup taunt"] = &RaidMcTriggerContext::magmadar_backup_taunt;
+        creators["mc magmadar lava bomb"] = &RaidMcTriggerContext::magmadar_lava_bomb;
+        creators["mc baron geddon burning ground"] = &RaidMcTriggerContext::geddon_burning_ground;
+        creators["mc raid dispel"] = &RaidMcTriggerContext::raid_dispel;
+        creators["mc magmadar mark"] = &RaidMcTriggerContext::magmadar_mark;
+        creators["mc gehennas mark"] = &RaidMcTriggerContext::gehennas_mark;
+        creators["mc lucifron mark"] = &RaidMcTriggerContext::lucifron_mark;
+        creators["mc baron geddon burn"] = &RaidMcTriggerContext::baron_geddon_burn;
+        creators["mc golemagg cave in"] = &RaidMcTriggerContext::golemagg_cave_in;
+        creators["mc ragnaros sons mark"] = &RaidMcTriggerContext::ragnaros_sons_mark;
+        creators["mc ragnaros magma strike"] = &RaidMcTriggerContext::ragnaros_magma_strike;
+        creators["mc garr firesworn mark"] = &RaidMcTriggerContext::garr_firesworn_mark;
+        creators["mc garr firesworn eruption"] = &RaidMcTriggerContext::garr_firesworn_eruption;
+        creators["mc sulfuron mark"] = &RaidMcTriggerContext::sulfuron_mark;
+        creators["mc gehennas rain of fire"] = &RaidMcTriggerContext::gehennas_rain_of_fire;
+        creators["mc gehennas flame orb cast"] = &RaidMcTriggerContext::gehennas_flame_orb_cast;
+        creators["mc gehennas flame orb"] = &RaidMcTriggerContext::gehennas_flame_orb;
+        creators["mc shazzrah backup taunt"] = &RaidMcTriggerContext::shazzrah_backup_taunt;
+    }
+
+private:
+    static Trigger* lucifron_shadow_resistance(PlayerbotAI* botAI) { return new BossShadowResistanceTrigger(botAI, "lucifron"); }
+    static Trigger* magmadar_fire_resistance(PlayerbotAI* botAI) { return new BossFireResistanceTrigger(botAI, "magmadar"); }
+    static Trigger* gehennas_shadow_resistance(PlayerbotAI* botAI) { return new BossShadowResistanceTrigger(botAI, "gehennas"); }
+    static Trigger* garr_fire_resistance(PlayerbotAI* botAI) { return new BossFireResistanceTrigger(botAI, "garr"); }
+    static Trigger* baron_geddon_fire_resistance(PlayerbotAI* botAI) { return new BossFireResistanceTrigger(botAI, "baron geddon"); }
+    static Trigger* living_bomb_debuff(PlayerbotAI* botAI) { return new McLivingBombDebuffTrigger(botAI); }
+    static Trigger* baron_geddon_inferno(PlayerbotAI* botAI) { return new McBaronGeddonInfernoTrigger(botAI); }
+    static Trigger* shazzrah_ranged(PlayerbotAI* botAI) { return new McShazzrahRangedTrigger(botAI); }
+    static Trigger* shazzrah_reflection(PlayerbotAI* botAI) { return new McShazzrahReflectionTrigger(botAI); }
+    static Trigger* shazzrah_tank_reflection(PlayerbotAI* botAI) { return new McShazzrahTankReflectionTrigger(botAI); }
+    static Trigger* sacrificial_chains(PlayerbotAI* botAI) { return new McSacrificialChainsTrigger(botAI); }
+    static Trigger* sulfuron_harbinger_fire_resistance(PlayerbotAI* botAI) { return new BossFireResistanceTrigger(botAI, "sulfuron harbinger"); }
+    static Trigger* golemagg_fire_resistance(PlayerbotAI* botAI) { return new BossFireResistanceTrigger(botAI, "golemagg the incinerator"); }
+    static Trigger* golemagg_mark_boss(PlayerbotAI* botAI) { return new McGolemaggMarkBossTrigger(botAI); }
+    static Trigger* golemagg_is_main_tank(PlayerbotAI* botAI) { return new McGolemaggIsMainTankTrigger(botAI); }
+    static Trigger* golemagg_is_assist_tank(PlayerbotAI* botAI) { return new McGolemaggIsAssistTankTrigger(botAI); }
+    static Trigger* majordomo_shadow_resistance(PlayerbotAI* botAI) { return new BossShadowResistanceTrigger(botAI, "majordomo executus"); }
+    static Trigger* ragnaros_fire_resistance(PlayerbotAI* botAI) { return new BossFireResistanceTrigger(botAI, "ragnaros"); }
+    static Trigger* core_hound_mark(PlayerbotAI* botAI) { return new McCoreHoundMarkTrigger(botAI); }
+    static Trigger* in_lava(PlayerbotAI* botAI) { return new McInLavaTrigger(botAI); }
+    static Trigger* golemagg_magma_splash(PlayerbotAI* botAI) { return new McGolemaggMagmaSplashTrigger(botAI); }
+    static Trigger* golemagg_is_healer(PlayerbotAI* botAI) { return new McGolemaggIsHealerTrigger(botAI); }
+    static Trigger* majordomo_damage_shield(PlayerbotAI* botAI) { return new McMajordomoDamageShieldTrigger(botAI); }
+    static Trigger* magmadar_backup_taunt(PlayerbotAI* botAI) { return new RaidBackupTauntTrigger(botAI, "mc magmadar backup taunt", "magmadar"); }
+    static Trigger* geddon_burning_ground(PlayerbotAI* botAI) { return new McGeddonBurningGroundTrigger(botAI); }
+    static Trigger* raid_dispel(PlayerbotAI* botAI) { return new McRaidDispelTrigger(botAI); }
+    static Trigger* magmadar_lava_bomb(PlayerbotAI* botAI)
+    {
+        return new McMagmadarLavaBombTrigger(botAI);
+    }
+    static Trigger* magmadar_mark(PlayerbotAI* botAI) { return new RaidKillOrderMarkTrigger(botAI, "mc magmadar mark", "magmadar"); }
+    static Trigger* gehennas_mark(PlayerbotAI* botAI) { return new RaidKillOrderMarkTrigger(botAI, "mc gehennas mark", "gehennas"); }
+    static Trigger* ragnaros_sons_mark(PlayerbotAI* botAI) { return new McRagnarosSonsTrigger(botAI); }
+    static Trigger* golemagg_cave_in(PlayerbotAI* botAI) { return new McGolemaggCaveInTrigger(botAI); }
+    static Trigger* ragnaros_magma_strike(PlayerbotAI* botAI) { return new McRagnarosMagmaStrikeTrigger(botAI); }
+    static Trigger* garr_firesworn_mark(PlayerbotAI* botAI) { return new McGarrFireswornMarkTrigger(botAI); }
+    static Trigger* garr_firesworn_eruption(PlayerbotAI* botAI) { return new McGarrFireswornEruptionTrigger(botAI); }
+    static Trigger* baron_geddon_burn(PlayerbotAI* botAI) { return new McBaronGeddonBurnTrigger(botAI); }
+    static Trigger* lucifron_mark(PlayerbotAI* botAI) { return new McCoaKillOrderTrigger(botAI, "mc lucifron mark", "lucifron"); }
+    static Trigger* sulfuron_mark(PlayerbotAI* botAI) { return new McCoaKillOrderTrigger(botAI, "mc sulfuron mark", "sulfuron harbinger"); }
+    static Trigger* gehennas_flame_orb_cast(PlayerbotAI* botAI) { return new McGehennasFlameOrbCastTrigger(botAI); }
+    static Trigger* gehennas_rain_of_fire(PlayerbotAI* botAI) { return new McGehennasRainOfFireTrigger(botAI); }
+    static Trigger* gehennas_flame_orb(PlayerbotAI* botAI)
+    {
+        return new RaidNearCreatureTrigger(botAI, "mc gehennas flame orb", MoltenCoreHelpers::NPC_COA_GEHENNAS_FLAME_ORB,
+                                           MoltenCoreHelpers::FLAME_ORB_AVOID_DISTANCE);
+    }
+    static Trigger* shazzrah_backup_taunt(PlayerbotAI* botAI) { return new RaidBackupTauntTrigger(botAI, "mc shazzrah backup taunt", "shazzrah"); }
+};
+
+#endif

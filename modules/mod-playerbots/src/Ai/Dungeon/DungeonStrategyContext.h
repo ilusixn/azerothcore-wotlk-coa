@@ -1,0 +1,137 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#ifndef PLAYERBOTS_DUNGEONSTRATEGYCONTEXT_H
+#define PLAYERBOTS_DUNGEONSTRATEGYCONTEXT_H
+
+#include "ACStrategy.h"
+#include "AKStrategy.h"
+#include "ANStrategy.h"
+#include "BFDStrategy.h"
+#include "BRDStrategy.h"
+#include "BRSStrategy.h"
+#include "CoSStrategy.h"
+#include "DTKStrategy.h"
+#include "FoSStrategy.h"
+#include "GDStrategy.h"
+#include "HoLStrategy.h"
+#include "HoSStrategy.h"
+#include "MaraStrategy.h"
+#include "MechStrategy.h"
+#include "MgTStrategy.h"
+#include "NexStrategy.h"
+#include "OCStrategy.h"
+#include "OtherSideStrategy.h"
+#include "VaultsStrategy.h"
+#include "PoSStrategy.h"
+#include "RFCStrategy.h"
+#include "RFDStrategy.h"
+#include "RFKStrategy.h"
+#include "ScholoStrategy.h"
+#include "SethStrategy.h"
+#include "SFKStrategy.h"
+#include "SMStrategy.h"
+#include "Strategy.h"
+#include "StratStrategy.h"
+#include "STStrategy.h"
+#include "TOCStrategy.h"
+#include "UBStrategy.h"
+#include "UKStrategy.h"
+#include "UldaStrategy.h"
+#include "DMStrategy.h"
+#include "UPStrategy.h"
+#include "VHStrategy.h"
+#include "WCStrategy.h"
+
+class DungeonStrategyContext : public NamedObjectContext<Strategy>
+{
+    public:
+        DungeonStrategyContext() : NamedObjectContext<Strategy>(false, true)
+        {
+            // Vanilla
+            creators["vanilla-rfc"] = &DungeonStrategyContext::vanilla_rfc;  // Ragefire Chasm
+            creators["vanilla-sfk"] = &DungeonStrategyContext::vanilla_sfk;  // Shadowfang Keep
+            creators["vanilla-sm"] = &DungeonStrategyContext::vanilla_sm;    // Scarlet Monastery
+            creators["vanilla-bfd"] = &DungeonStrategyContext::vanilla_bfd;  // Blackfathom Deeps
+            creators["vanilla-ulda"] = &DungeonStrategyContext::vanilla_ulda;  // Uldaman
+            creators["vanilla-wc"] = &DungeonStrategyContext::vanilla_wc;  // Wailing Caverns
+            creators["vanilla-rfk"] = &DungeonStrategyContext::vanilla_rfk;  // Razorfen Kraul
+            creators["vanilla-rfd"] = &DungeonStrategyContext::vanilla_rfd;  // Razorfen Downs
+            creators["vanilla-brs"] = &DungeonStrategyContext::vanilla_brs;  // Blackrock Spire
+            creators["vanilla-brd"] = &DungeonStrategyContext::vanilla_brd;  // Blackrock Depths
+            creators["vanilla-scholo"] = &DungeonStrategyContext::vanilla_scholo;  // Scholomance
+            creators["vanilla-strat"] = &DungeonStrategyContext::vanilla_strat;  // Stratholme
+            creators["vanilla-st"] = &DungeonStrategyContext::vanilla_st;  // Sunken Temple
+            creators["vanilla-mara"] = &DungeonStrategyContext::vanilla_mara;  // Maraudon
+            creators["coa-other-side"] = &DungeonStrategyContext::coa_other_side;  // Road to De Other Side
+            creators["coa-vaults"] = &DungeonStrategyContext::coa_vaults;  // Vaults of the Inquisition
+            creators["vanilla-dm"] = &DungeonStrategyContext::vanilla_dm;  // Dire Maul
+
+            // Burning Crusade
+            creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;           // Auchindoun: Auchenai Crypts
+            creators["tbc-seth"] = &DungeonStrategyContext::tbc_seth;       // Auchindoun: Sethekk Halls
+            creators["tbc-mech"] = &DungeonStrategyContext::tbc_mech;       // Tempest Keep: The Mechanar
+            creators["tbc-ub"] = &DungeonStrategyContext::tbc_ub;           // Coilfang Reservoir: The Underbog
+            creators["tbc-mgt"] = &DungeonStrategyContext::tbc_mgt;         // Magisters' Terrace
+
+            // Wrath of the Lich King
+            creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
+            creators["wotlk-nex"] = &DungeonStrategyContext::wotlk_nex;     // The Nexus
+            creators["wotlk-an"] = &DungeonStrategyContext::wotlk_an;       // Azjol-Nerub
+            creators["wotlk-ok"] = &DungeonStrategyContext::wotlk_ok;       // Ahn'kahet: The Old Kingdom
+            creators["wotlk-dtk"] = &DungeonStrategyContext::wotlk_dtk;     // Drak'Tharon Keep
+            creators["wotlk-vh"] = &DungeonStrategyContext::wotlk_vh;       // The Violet Hold
+            creators["wotlk-gd"] = &DungeonStrategyContext::wotlk_gd;       // Gundrak
+            creators["wotlk-hos"] = &DungeonStrategyContext::wotlk_hos;     // Halls of Stone
+            creators["wotlk-hol"] = &DungeonStrategyContext::wotlk_hol;     // Halls of Lightning
+            creators["wotlk-occ"] = &DungeonStrategyContext::wotlk_occ;     // The Oculus
+            creators["wotlk-up"] = &DungeonStrategyContext::wotlk_up;       // Utgarde Pinnacle
+            creators["wotlk-cos"] = &DungeonStrategyContext::wotlk_cos;     // The Culling of Stratholme
+            creators["wotlk-toc"] = &DungeonStrategyContext::wotlk_toc;     // Trial of the Champion
+            creators["wotlk-pos"] = &DungeonStrategyContext::wotlk_pos;     // Pit of Saron
+            creators["wotlk-fos"] = &DungeonStrategyContext::wotlk_fos;     // The Forge of Souls
+        }
+    private:
+        static Strategy* vanilla_rfc(PlayerbotAI* botAI) { return new VanillaDungeonRFCStrategy(botAI); }
+        static Strategy* vanilla_sfk(PlayerbotAI* botAI) { return new VanillaDungeonSFKStrategy(botAI); }
+        static Strategy* vanilla_sm(PlayerbotAI* botAI) { return new VanillaDungeonSMStrategy(botAI); }
+        static Strategy* vanilla_bfd(PlayerbotAI* botAI) { return new VanillaDungeonBFDStrategy(botAI); }
+        static Strategy* vanilla_ulda(PlayerbotAI* botAI) { return new VanillaDungeonUldaStrategy(botAI); }
+        static Strategy* vanilla_wc(PlayerbotAI* botAI) { return new VanillaDungeonWCStrategy(botAI); }
+        static Strategy* vanilla_rfk(PlayerbotAI* botAI) { return new VanillaDungeonRFKStrategy(botAI); }
+        static Strategy* vanilla_rfd(PlayerbotAI* botAI) { return new VanillaDungeonRFDStrategy(botAI); }
+        static Strategy* vanilla_brs(PlayerbotAI* botAI) { return new VanillaDungeonBRSStrategy(botAI); }
+        static Strategy* vanilla_brd(PlayerbotAI* botAI) { return new VanillaDungeonBRDStrategy(botAI); }
+        static Strategy* vanilla_scholo(PlayerbotAI* botAI) { return new VanillaDungeonScholoStrategy(botAI); }
+        static Strategy* vanilla_strat(PlayerbotAI* botAI) { return new VanillaDungeonStratStrategy(botAI); }
+    static Strategy* vanilla_st(PlayerbotAI* botAI) { return new VanillaDungeonSTStrategy(botAI); }
+        static Strategy* vanilla_mara(PlayerbotAI* botAI) { return new VanillaDungeonMaraStrategy(botAI); }
+        static Strategy* coa_other_side(PlayerbotAI* botAI) { return new CoaDungeonOtherSideStrategy(botAI); }
+        static Strategy* coa_vaults(PlayerbotAI* botAI) { return new CoaDungeonVaultsStrategy(botAI); }
+        static Strategy* vanilla_dm(PlayerbotAI* botAI) { return new VanillaDungeonDMStrategy(botAI); }
+        static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonAuchenaiCryptsStrategy(botAI); }
+        static Strategy* tbc_seth(PlayerbotAI* botAI) { return new TbcDungeonSethekkHallsStrategy(botAI); }
+        static Strategy* tbc_mech(PlayerbotAI* botAI) { return new TbcDungeonMechanarStrategy(botAI); }
+        static Strategy* tbc_ub(PlayerbotAI* botAI) { return new TbcDungeonUnderbogStrategy(botAI); }
+        static Strategy* tbc_mgt(PlayerbotAI* botAI) { return new TbcDungeonMagistersTerraceStrategy(botAI); }
+        static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
+        static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }
+        static Strategy* wotlk_an(PlayerbotAI* botAI) { return new WotlkDungeonANStrategy(botAI); }
+        static Strategy* wotlk_ok(PlayerbotAI* botAI) { return new WotlkDungeonOKStrategy(botAI); }
+        static Strategy* wotlk_dtk(PlayerbotAI* botAI) { return new WotlkDungeonDTKStrategy(botAI); }
+        static Strategy* wotlk_vh(PlayerbotAI* botAI) { return new WotlkDungeonVHStrategy(botAI); }
+        static Strategy* wotlk_gd(PlayerbotAI* botAI) { return new WotlkDungeonGDStrategy(botAI); }
+        static Strategy* wotlk_hos(PlayerbotAI* botAI) { return new WotlkDungeonHoSStrategy(botAI); }
+        static Strategy* wotlk_hol(PlayerbotAI* botAI) { return new WotlkDungeonHoLStrategy(botAI); }
+        static Strategy* wotlk_occ(PlayerbotAI* botAI) { return new WotlkDungeonOccStrategy(botAI); }
+        static Strategy* wotlk_up(PlayerbotAI* botAI) { return new WotlkDungeonUPStrategy(botAI); }
+        static Strategy* wotlk_cos(PlayerbotAI* botAI) { return new WotlkDungeonCoSStrategy(botAI); }
+        static Strategy* wotlk_fos(PlayerbotAI* botAI) { return new WotlkDungeonFoSStrategy(botAI); }
+        static Strategy* wotlk_pos(PlayerbotAI* botAI) { return new WotlkDungeonPoSStrategy(botAI); }
+        static Strategy* wotlk_toc(PlayerbotAI* botAI) { return new WotlkDungeonToCStrategy(botAI); }
+};
+
+#endif

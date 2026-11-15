@@ -1,0 +1,178 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#ifndef PLAYERBOTS_RANGETRIGGERS_H
+#define PLAYERBOTS_RANGETRIGGERS_H
+
+#include "PlayerbotAIConfig.h"
+#include "Trigger.h"
+
+class PlayerbotAI;
+
+class EnemyTooCloseForSpellTrigger : public Trigger
+{
+public:
+    EnemyTooCloseForSpellTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy too close for spell") {}
+
+    bool IsActive() override;
+};
+
+class EnemyTooCloseForShootTrigger : public Trigger
+{
+public:
+    EnemyTooCloseForShootTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy too close for shoot") {}
+
+    bool IsActive() override;
+};
+
+class EnemyTooCloseForAutoShotTrigger : public Trigger
+{
+public:
+    EnemyTooCloseForAutoShotTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy too close for auto shot") {}
+
+    bool IsActive() override;
+};
+
+class EnemyTooCloseForMeleeTrigger : public Trigger
+{
+public:
+    EnemyTooCloseForMeleeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy too close for melee", 5) {}
+
+    bool IsActive() override;
+};
+
+class EnemyIsCloseTrigger : public Trigger
+{
+public:
+    EnemyIsCloseTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy is close") {}
+
+    bool IsActive() override;
+};
+
+class EnemyWithinMeleeTrigger : public Trigger
+{
+public:
+    EnemyWithinMeleeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy within melee") {}
+
+    bool IsActive() override;
+};
+
+class OutOfRangeTrigger : public Trigger
+{
+public:
+    OutOfRangeTrigger(PlayerbotAI* botAI, std::string const name, float distance)
+        : Trigger(botAI, name), distance(distance)
+    {
+    }
+
+    bool IsActive() override;
+    std::string const GetTargetName() override { return "current target"; }
+
+protected:
+    float distance;
+};
+
+class EnemyOutOfMeleeTrigger : public OutOfRangeTrigger
+{
+public:
+    EnemyOutOfMeleeTrigger(PlayerbotAI* botAI)
+        : OutOfRangeTrigger(botAI, "enemy out of melee range", sPlayerbotAIConfig.meleeDistance)
+    {
+    }
+
+    // bool IsActive() override;
+};
+
+class EnemyOutOfSpellRangeTrigger : public OutOfRangeTrigger
+{
+public:
+    EnemyOutOfSpellRangeTrigger(PlayerbotAI* botAI);
+};
+
+class InFrontOfTankTrigger : public Trigger
+{
+public:
+    InFrontOfTankTrigger(PlayerbotAI* botAI) : Trigger(botAI, "in front of tank") {}
+    bool IsActive() override;
+};
+
+class PartyMemberToHealOutOfSpellRangeTrigger : public OutOfRangeTrigger
+{
+public:
+    PartyMemberToHealOutOfSpellRangeTrigger(PlayerbotAI* botAI);
+
+    bool IsActive() override;
+    std::string const GetTargetName() override { return "party member to heal"; }
+};
+
+// A moment out of sight is normal while the tank turns a corner; only a lasting loss needs a new position.
+constexpr uint32 REGAIN_GROUP_SIGHT_DELAY_MS = 2000;
+
+class TargetOutOfSightTrigger : public Trigger
+{
+public:
+    TargetOutOfSightTrigger(PlayerbotAI* botAI) : Trigger(botAI, "target out of sight", 2) {}
+
+    bool IsActive() override;
+};
+
+class GroupOutOfSightTrigger : public Trigger
+{
+public:
+    GroupOutOfSightTrigger(PlayerbotAI* botAI) : Trigger(botAI, "group out of sight", 1) {}
+
+    bool IsActive() override;
+
+private:
+    uint32 lostSightAt = 0;
+};
+
+class FarFromMasterTrigger : public Trigger
+{
+public:
+    FarFromMasterTrigger(PlayerbotAI* botAI, std::string const name = "far from master", float distance = 12.0f,
+                         int32 checkInterval = 50)
+        : Trigger(botAI, name, checkInterval), distance(distance)
+    {
+    }
+
+    bool IsActive() override;
+
+private:
+    float distance;
+};
+
+class OutOfReactRangeTrigger : public FarFromMasterTrigger
+{
+public:
+    OutOfReactRangeTrigger(PlayerbotAI* botAI) : FarFromMasterTrigger(botAI, "out of react range", 50.0f, 5) {}
+};
+
+class TooCloseToCreatureTrigger : public Trigger
+{
+public:
+    TooCloseToCreatureTrigger(PlayerbotAI* ai) : Trigger(ai, "too close to creature trigger") {}
+
+    bool TooCloseToCreature(uint32 creatureId, float range, bool alive = true);
+};
+
+class TooCloseToPlayerWithDebuffTrigger : public Trigger
+{
+public:
+    TooCloseToPlayerWithDebuffTrigger(PlayerbotAI* ai) : Trigger(ai, "too cloose to player with debuff trigger") {}
+
+    bool TooCloseToPlayerWithDebuff(uint32 spellId, float range);
+};
+
+class TooFarFromPlayerWithAuraTrigger : public Trigger
+{
+public:
+    TooFarFromPlayerWithAuraTrigger(PlayerbotAI* ai) : Trigger(ai, "too far from player with aura trigger") {}
+
+    bool TooFarFromPlayerWithAura(uint32 spellId, float range, bool selfInclude = false);
+};
+
+#endif

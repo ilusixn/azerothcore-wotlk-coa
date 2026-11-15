@@ -1,0 +1,778 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#include "CoaWorldGuilds.h"
+#include "CoaWorldAiBudget.h"
+#include <chrono>
+#include "CoaWorldBgPace.h"
+#include "Playerbots.h"
+#include "CoaSpecialization.h"
+#include "BattleGroundTactics.h"
+#include "CoaBossKnowledge.h"
+#include "BattlefieldScript.h"
+#include "CoaLeaveInstance.h"
+#include "CoaMissionMgr.h"
+#include "Channel.h"
+#include "CityDuels.h"
+#include "CoaAltAddon.h"
+#include "CoaBotIdentify.h"
+#include "CoaLive.h"
+#include "Config.h"
+#include "DatabaseEnv.h"
+#include "DatabaseLoader.h"
+#include "GuildTaskMgr.h"
+#include "PlayerScript.h"
+#include "PlayerbotAIConfig.h"
+#include "PlayerbotFactory.h"
+#include "PlayerbotCommandScript.h"
+#include "PlayerbotCommandServer.h"
+#include "PlayerbotGuildMgr.h"
+#include "PlayerbotSpellRepository.h"
+#include "PlayerbotOperations.h"
+#include "PlayerbotWorldThreadProcessor.h"
+#include "RandomPlayerbotMgr.h"
+#include "ScriptMgr.h"
+#include "cmath"
+#include <algorithm>
+
+// Shown to players at login: bump it with every CoA Bots release.
+static constexpr char const* COA_BOTS_VERSION = "3.1.1";
+
+// For ".playerbots version", which still answers when a host removed the login message.
+char const* CoaBotsVersion() { return COA_BOTS_VERSION; }
+
+class PlayerbotsDatabaseScript : public DatabaseScript
+{
+public:
+    PlayerbotsDatabaseScript() : DatabaseScript("PlayerbotsDatabaseScript") {}
+
+    bool OnDatabasesLoading() override
+    {
+        DatabaseLoader playerbotLoader("server.playerbots");
+        playerbotLoader.SetUpdateFlags(sConfigMgr->GetOption<bool>("Playerbots.Updates.EnableDatabases", true)
+                                           ? DatabaseLoader::DATABASE_PLAYERBOTS
+                                           : 0);
+        playerbotLoader.AddDatabase(PlayerbotsDatabase, "Playerbots");
+
+        return playerbotLoader.Load();
+    }
+
+    void OnDatabasesKeepAlive() override { PlayerbotsDatabase.KeepAlive(); }
+
+    void OnDatabasesClosing() override { PlayerbotsDatabase.Close(); }
+
+    void OnDatabaseWarnAboutSyncQueries(bool apply) override { PlayerbotsDatabase.WarnAboutSyncQueries(apply); }
+
+    void OnDatabaseSelectIndexLogout(Player* player, uint32& statementIndex, uint32& statementParam) override
+    {
+        statementIndex = CHAR_UPD_CHAR_OFFLINE;
+        statementParam = player->GetGUID().GetCounter();
+    }
+
+    void OnDatabaseGetDBRevision(std::string& revision) override
+    {
+        if (QueryResult resultPlayerbot =
+                PlayerbotsDatabase.Query("SELECT date FROM version_db_playerbots ORDER BY date DESC LIMIT 1"))
+        {
+            Field* fields = resultPlayerbot->Fetch();
+            revision = fields[0].Get<std::string>();
+        }
+
+        if (revision.empty())
+            revision = "Unknown Playerbots Database Revision";
+    }
+};
+
+class PlayerbotsPlayerScript : public PlayerScript
+{
+public:
+    PlayerbotsPlayerScript() : PlayerScript("PlayerbotsPlayerScript", {
+        PLAYERHOOK_ON_LOGIN,
+        PLAYERHOOK_ON_SAVE,
+        PLAYERHOOK_ON_AFTER_UPDATE,
+        PLAYERHOOK_ON_BEFORE_CRITERIA_PROGRESS,
+        PLAYERHOOK_ON_BEFORE_ACHI_COMPLETE,
+        PLAYERHOOK_CAN_PLAYER_USE_PRIVATE_CHAT,
+        PLAYERHOOK_CAN_PLAYER_USE_GROUP_CHAT,
+        PLAYERHOOK_CAN_PLAYER_USE_GUILD_CHAT,
+        PLAYERHOOK_CAN_PLAYER_USE_CHANNEL_CHAT,
+        PLAYERHOOK_ON_GIVE_EXP,
+        PLAYERHOOK_ON_UPDATE_ZONE,
+        PLAYERHOOK_ON_LOOT_ITEM,
+        PLAYERHOOK_ON_BEFORE_TELEPORT,
+        PLAYERHOOK_ON_PLAYER_JUST_DIED
+    }) {}
+
+    // An alt on a gathering mission counts its deaths: it gives up at AiPlayerbot.Missions.MaxDeaths.
+    void OnPlayerJustDied(Player* player) override
+    {
+        if (player && GET_PLAYERBOT_AI(player))
+            sCoaMissionMgr.OnDied(player);
+    }
+
+    // What the bots bring back. Only the finds worth a line, and only from bots: a server watching
+    // its bots wants to know what dropped, not to read every piece of linen cloth. The bar is
+    // AiPlayerbot.LootLogMinQuality (3, rare, by default; 4 for epics only).
+    // Off unless worldserver.conf points "playerbots.loot" at an appender.
+    void OnPlayerLootItem(Player* player, Item* item, uint32 count, ObjectGuid lootguid) override
+    {
+        if (!player || !item || !GET_PLAYERBOT_AI(player))
+            return;
+
+        // What an alt on a gathering mission gathers is mailed to its owner at the end.
+        sCoaMissionMgr.OnLoot(player, item, count, lootguid);
+
+        ItemTemplate const* proto = item->GetTemplate();
+        if (!proto || proto->Quality < sPlayerbotAIConfig.lootLogMinQuality)
+            return;
+
+        LOG_INFO("playerbots.loot", "{} (class {} level {}) looted {} ({}) quality {} ilvl {} x{}",
+                 player->GetName(), uint32(player->getClass()), uint32(player->GetLevel()), proto->Name1,
+                 proto->ItemId, uint32(proto->Quality), uint32(proto->ItemLevel), count);
+    }
+
+    // A client joins the channels of the zone it enters. A bot did it once, at login, and then
+    // talked into the channel of a zone it had left - or, more often, said nothing at all.
+    void OnPlayerUpdateZone(Player* player, uint32 /*newZone*/, uint32 /*newArea*/) override
+    {
+        if (player && GET_PLAYERBOT_AI(player))
+            PlayerbotWorldThreadProcessor::instance().QueueOperation(std::make_unique<BotChannelOperation>(
+                player->GetGUID(), "join zone channels",
+                [](Player* bot)
+                {
+                    PlayerbotHolder::JoinBotChannels(bot);
+                    return true;
+                }));
+    }
+
+    // Player::SaveToDB has just set the next autosave to PlayerSaveInterval. For a randombot without a real
+    // player as master, push it out to AiPlayerbot.RandomBotSaveInterval: fewer database writes with
+    // thousands of bots.
+    void OnPlayerSave(Player* player) override
+    {
+        uint32 const interval =
+            std::min<uint32>(sPlayerbotAIConfig.randomBotSaveInterval, UINT32_MAX / IN_MILLISECONDS) * IN_MILLISECONDS;
+        if (interval <= player->GetSaveTimer() || !player->GetSession() || !player->GetSession()->IsBot() ||
+            !sRandomPlayerbotMgr.IsRandomBot(player))
+            return;
+
+        if (PlayerbotAI* botAI = GET_PLAYERBOT_AI(player))
+            if (Player* master = botAI->GetMaster())
+                if (master->GetSession() && !master->GetSession()->IsBot())
+                    return;
+
+        player->SetSaveTimer(interval);
+    }
+
+    void OnPlayerLogin(Player* player) override
+    {
+        if (player && player->GetSession() && player->GetSession()->IsBot())
+        {
+            PlayerbotFactory::RestoreBotArmorVisuals(player);
+            return;
+        }
+        if (!player->GetSession()->IsBot())
+        {
+            PlayerbotsMgr::instance().AddPlayerbotData(player, false);
+            sRandomPlayerbotMgr.OnPlayerLogin(player);
+
+            // Before modifying the following messages, please make sure it does not violate the GNU GPLv2
+            // license especially if you are distributing a repack or hosting a public server
+            // e.g. you can replace the URL with your own repository,
+            // but it should be publicly accessible and include all modifications you've made
+            if (sPlayerbotAIConfig.enabled)
+            {
+                ChatHandler(player->GetSession()).SendSysMessage(
+                    "|cff00ff00For easy bot control, use the SquidBots addon:|r "
+                    "|cffcccccchttps://github.com/Zyth45/squidbots-addon|r");
+                // The source of this build (mod-playerbots and every CoA change) stays linked here.
+                ChatHandler(player->GetSession()).SendSysMessage(
+                    std::string("|cff00ff00CoA Bots|r |cff00ccffv") + COA_BOTS_VERSION +
+                    "|r (|cff00ccffmod-playerbots|r) |cffcccccchttps://github.com/Zyth45/mod-playerbots|r");
+            }
+
+            if (sPlayerbotAIConfig.enabled || sPlayerbotAIConfig.randomBotAutologin)
+            {
+                std::string maxAllowedBotCount = std::to_string(sRandomPlayerbotMgr.GetMaxAllowedBotCount());
+
+                ChatHandler(player->GetSession()).SendSysMessage(
+                    "|cff00ff00Playerbots:|r The server is configured with " + maxAllowedBotCount + " bots.");
+            }
+        }
+    }
+
+    bool OnPlayerBeforeTeleport(Player* player, uint32 mapid, float /*x*/, float /*y*/, float /*z*/,
+                                float /*orientation*/, uint32 /*options*/, Unit* /*target*/) override
+    {
+        CoaLeaveInstance::OnBeforeTeleport(player, mapid);
+
+        /* for now commmented out until proven its actually required
+        * havent seen any proof CleanVisibilityReferences() is needed
+
+        // If the player is not safe to touch, do nothing
+        if (!player)
+            return true;
+
+        // If same map or not in world do nothing
+        if (!player->IsInWorld() || player->GetMapId() == mapid)
+            return true;
+
+        // If this is a selfbot, do nothing
+        PlayerbotAI* ai = GET_PLAYERBOT_AI(player);
+        if (!ai || IsSelfBot(player))
+            return true;
+
+        // Cross-map bot teleport: defer visibility reference cleanup.
+        // CleanVisibilityReferences() erases this bot's GUID from other objects' visibility containers.
+        // This is intentionally done via the event queue (instead of directly here) because erasing
+        // from other players' visibility maps inside the teleport call stack can hit unsafe re-entrancy
+        // or iterator invalidation while visibility updates are in progress
+        ObjectGuid guid = player->GetGUID();
+        player->m_Events.AddEventAtOffset(
+            [guid, mapid]()
+            {
+                // do nothing, if the player is not safe to touch
+                Player* p = ObjectAccessor::FindPlayer(guid);
+                if (!p || !p->IsInWorld() || p->IsDuringRemoveFromWorld())
+                    return;
+
+                // do nothing if we are already on the target map
+                if (p->GetMapId() == mapid)
+                    return;
+
+                p->GetObjectVisibilityContainer().CleanVisibilityReferences();
+            },
+            Milliseconds(0));
+
+        */
+
+        return true;
+    }
+
+    void OnPlayerAfterUpdate(Player* player, uint32 diff) override
+    {
+        PlayerbotAI* const botAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
+
+        // CoA World (AiBudgetMs): over its map's AI budget this tick, the bot skips its AI and keeps the time.
+        if (botAI != nullptr && CoaWorldAiBudget::On() && CoaWorldAiBudget::Skip(player, botAI))
+        {
+            botAI->coaBudgetWaitMs += diff;
+            CoaLive::OnBotUpdate(player, botAI, diff);
+        }
+        else if (botAI != nullptr)
+        {
+            auto const aiStart = std::chrono::steady_clock::now();
+            diff += botAI->coaBudgetWaitMs;
+            botAI->coaBudgetWaitMs = 0;
+            // CoA World (BotOnlyBgPace): in a battleground or arena with no real player on the map nor in its queue,
+            // the bot thinks every IntervalMs; back to every tick as soon as one comes (checked every second).
+            if (CoaWorldBgPace::On() && player->InBattleground())
+            {
+                botAI->coaBgCheckMs += diff;
+                if (botAI->coaBgCheckMs >= 1000)
+                {
+                    botAI->coaBgCheckMs = 0;
+                    botAI->coaBgBotOnly = CoaWorldBgPace::BotOnly(player);
+                }
+            }
+            else
+                botAI->coaBgBotOnly = false;
+
+            if (botAI->coaBgBotOnly)
+            {
+                botAI->coaBgWaitMs += diff;
+                if (botAI->coaBgWaitMs >= CoaWorldBgPace::IntervalMs())
+                {
+                    botAI->UpdateAI(botAI->coaBgWaitMs);
+                    botAI->coaBgWaitMs = 0;
+                }
+            }
+            else
+            {
+                botAI->UpdateAI(diff + botAI->coaBgWaitMs);
+                botAI->coaBgWaitMs = 0;
+            }
+            if (CoaWorldAiBudget::On())
+                CoaWorldAiBudget::Spent(player, uint64(std::chrono::duration_cast<std::chrono::microseconds>(
+                                                           std::chrono::steady_clock::now() - aiStart).count()));
+            CoaLive::OnBotUpdate(player, botAI, diff);
+        }
+
+        if (PlayerbotMgr* playerbotMgr = GET_PLAYERBOT_MGR(player))
+        {
+            playerbotMgr->UpdateAI(diff);
+        }
+
+        if (botAI == nullptr)
+            CoaLeaveInstance::OnUpdate(player);
+    }
+
+    using PlayerScript::OnPlayerCanUseChat;  // keep the base overloads visible
+
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 lang, std::string& msg, Player* receiver) override
+    {
+        if (type != CHAT_MSG_WHISPER)
+        {
+            return true;
+        }
+
+        if (lang == LANG_ADDON)
+        {
+            CoaAltAddon::OnAddonWhisper(player, receiver, msg);
+            return true;
+        }
+
+        PlayerbotAI* const botAI = PlayerbotsMgr::instance().GetPlayerbotAI(receiver);
+
+        if (botAI == nullptr)
+        {
+            return true;
+        }
+
+        // CoA World (Guilds.GearAsk): "yes"/"no" to a guildmate's offer of gear.
+        if (CoaWorldGuildGiftWhisper(player, receiver, msg))
+            return true;
+
+        // CoA Live: a stranger's whisper to a random bot gets a human answer, not a command.
+        if (CoaLive::OnWhisper(player, receiver, msg))
+            return true;
+
+        botAI->HandleCommand(type, msg, player);
+
+        // hotfix; otherwise the server will crash when whispering logout
+        // https://github.com/mod-playerbots/mod-playerbots/pull/1838
+        // TODO: find the root cause and solve it. (does not happen in party chat)
+        if (msg == "logout")
+            return false;
+
+        return true;
+    }
+
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 lang, std::string& msg, Group* group) override
+    {
+        // Addon traffic (DBM, Carbonite, ...) is no bot command; its text used to trigger item commands like trade.
+        // Only the SquidBots Lite "WHO?" gets an answer from the bots of the group (CoaBotIdentify).
+        if (lang == LANG_ADDON)
+        {
+            CoaBotIdentify::OnGroupAddonMessage(player, type, msg, group);
+            return true;
+        }
+
+        // "summon" from the leader of a raid built by ".playerbots coa raid" (SquidBots Lite Regroup): this hook runs
+        // in the world thread (CMSG_MESSAGECHAT), so the server brings every bot of the raid itself, across maps, and
+        // the bots do not get the command again (RC11c). Any other group or command: unchanged.
+        if (group && msg == "summon" && CoaIsBuiltRaid(group) && group->IsLeader(player->GetGUID()) &&
+            !GET_PLAYERBOT_AI(player))
+        {
+            uint32 const sent = CoaRegroupRaid(player);
+            LOG_WARN("playerbots", "coa regroup: {} summons the raid: {} teleport(s) sent", player->GetName(), sent);
+            return true;
+        }
+
+        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* const member = itr->GetSource();
+
+            if (member == nullptr)
+                continue;
+
+            PlayerbotAI* const botAI = PlayerbotsMgr::instance().GetPlayerbotAI(member);
+
+            if (botAI == nullptr)
+                continue;
+
+            botAI->HandleCommand(type, msg, player);
+        }
+
+        return true;
+    }
+
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 lang, std::string& msg, Guild* /*guild*/) override
+    {
+        if (type != CHAT_MSG_GUILD || lang == LANG_ADDON)
+            return true;
+
+        PlayerbotMgr* playerbotMgr = PlayerbotsMgr::instance().GetPlayerbotMgr(player);
+
+        if (playerbotMgr == nullptr)
+            return true;
+
+        for (PlayerBotMap::const_iterator it = playerbotMgr->GetPlayerBotsBegin(); it != playerbotMgr->GetPlayerBotsEnd(); ++it)
+        {
+            Player* const bot = it->second;
+
+            if (bot == nullptr)
+                continue;
+
+            if (bot->GetGuildId() != player->GetGuildId())
+                continue;
+
+            PlayerbotsMgr::instance().GetPlayerbotAI(bot)->HandleCommand(type, msg, player);
+        }
+
+        return true;
+    }
+
+    bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Channel* channel) override
+    {
+        CoaLfgHeard(player, msg, channel);
+
+        PlayerbotMgr* const playerbotMgr = PlayerbotsMgr::instance().GetPlayerbotMgr(player);
+
+        if (playerbotMgr != nullptr && channel->GetFlags() & 0x18)
+            playerbotMgr->HandleCommand(type, msg);
+
+        sRandomPlayerbotMgr.HandleCommand(type, msg, player);
+
+        return true;
+    }
+
+    bool OnPlayerBeforeAchievementComplete(Player* player, AchievementEntry const* achievement) override
+    {
+        if ((sRandomPlayerbotMgr.IsRandomBot(player) || sRandomPlayerbotMgr.IsAddclassBot(player)) &&
+            (achievement->flags & (ACHIEVEMENT_FLAG_REALM_FIRST_REACH | ACHIEVEMENT_FLAG_REALM_FIRST_KILL)))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    void OnPlayerGiveXP(Player* player, uint32& amount, Unit* /*victim*/, uint8 /*xpSource*/) override
+    {
+        // early return
+        if (sPlayerbotAIConfig.randomBotXPRate == 1.0 || !player)
+            return;
+
+        // no XP multiplier, when player is no bot.
+        if (!player->GetSession()->IsBot() || !sRandomPlayerbotMgr.IsRandomBot(player))
+            return;
+
+        // no XP multiplier, when bot is in a group with a real player.
+        if (Group* group = player->GetGroup())
+        {
+            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+            {
+                Player* member = gref->GetSource();
+                if (!member)
+                    continue;
+
+                if (!member->GetSession()->IsBot())
+                    return;
+            }
+        }
+
+        // otherwise apply bot XP multiplier.
+        amount = static_cast<uint32>(std::round(static_cast<float>(amount) * sPlayerbotAIConfig.randomBotXPRate));
+    }
+};
+
+class PlayerbotsMiscScript : public MiscScript
+{
+public:
+    PlayerbotsMiscScript() : MiscScript("PlayerbotsMiscScript", {MISCHOOK_ON_DESTRUCT_PLAYER}) {}
+
+    void OnDestructPlayer(Player* player) override
+    {
+        PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
+
+        if (botAI != nullptr)
+            delete botAI;
+
+        if (PlayerbotMgr* playerbotMgr = GET_PLAYERBOT_MGR(player))
+            delete playerbotMgr;
+    }
+};
+
+class PlayerbotsServerScript : public ServerScript
+{
+public:
+    PlayerbotsServerScript() : ServerScript("PlayerbotsServerScript", {
+        SERVERHOOK_CAN_PACKET_RECEIVE
+    }) {}
+
+    void OnPacketReceived(WorldSession* session, WorldPacket const& packet) override
+    {
+        if (Player* player = session->GetPlayer())
+            if (PlayerbotMgr* playerbotMgr = GET_PLAYERBOT_MGR(player))
+                playerbotMgr->HandleMasterIncomingPacket(packet);
+    }
+};
+
+class PlayerbotsWorldScript : public WorldScript
+{
+public:
+    PlayerbotsWorldScript() : WorldScript("PlayerbotsWorldScript", {
+        WORLDHOOK_ON_BEFORE_WORLD_INITIALIZED,
+        WORLDHOOK_ON_UPDATE,
+        WORLDHOOK_ON_SHUTDOWN
+    }) {}
+
+    void OnBeforeWorldInitialized() override
+    {
+        // Before modifying the following messages, please make sure it does not violate the GNU GPLv2
+        // license especially if you are distributing a repack or hosting a public server
+        // e.g. you can replace the URL with your own repository,
+        // but it should be publicly accessible and include all modifications you've made
+        LOG_INFO("server.loading", "╔══════════════════════════════════════════════════════════╗");
+        LOG_INFO("server.loading", "║                                                          ║");
+        LOG_INFO("server.loading", "║              AzerothCore Playerbots Module               ║");
+        LOG_INFO("server.loading", "║                                                          ║");
+        LOG_INFO("server.loading", "╟──────────────────────────────────────────────────────────╢");
+        LOG_INFO("server.loading", "║     mod-playerbots is a community-driven open-source     ║");
+        LOG_INFO("server.loading", "║  project based on AzerothCore, licensed under GNU GPLv2  ║");
+        LOG_INFO("server.loading", "╟──────────────────────────────────────────────────────────╢");
+        LOG_INFO("server.loading", "║     https://github.com/mod-playerbots/mod-playerbots     ║");
+        LOG_INFO("server.loading", "╚══════════════════════════════════════════════════════════╝");
+
+        uint32 oldMSTime = getMSTime();
+
+        LOG_INFO("server.loading", " ");
+        LOG_INFO("server.loading", "Load Playerbots Config...");
+
+        sPlayerbotAIConfig.Initialize();
+
+        LOG_INFO("server.loading", ">> Loaded playerbots config in {} ms", GetMSTimeDiffToNow(oldMSTime));
+        LOG_INFO("server.loading", " ");
+
+        PlayerbotSpellRepository::Instance().Initialize();
+
+        if (sPlayerbotAIConfig.coaBossKnowledge)
+            CoaBossKnowledge::Load();
+
+        LOG_INFO("server.loading", "Playerbots World Thread Processor initialized");
+    }
+
+    void OnUpdate(uint32 diff) override
+    {
+        if (sPlayerbotAIConfig.validationMode)
+            return;
+        PlayerbotWorldThreadProcessor::instance().Update(diff);
+        sRandomPlayerbotMgr.UpdateAI(diff);  // World thread only
+        sRandomPlayerbotMgr.CoaReleaseOrphanGroups();
+        CoaRegroupUpdate();  // raid check after ".playerbots coa raid" (RC11c), world thread
+        CityDuels::Update(diff);
+    }
+
+    void OnShutdown() override
+    {
+        // Command server sessions run on detached threads that would otherwise outlive the world thread processor.
+        PlayerbotCommandServer::instance().Stop();
+        CityDuels::ReleaseAll(false);
+    }
+};
+
+class PlayerbotsScript : public PlayerbotScript
+{
+public:
+    PlayerbotsScript() : PlayerbotScript("PlayerbotsScript") {}
+
+    bool OnPlayerbotCheckLFGQueue(lfg::Lfg5Guids const& guidsList) override
+    {
+        bool nonBotFound = false;
+
+        for (ObjectGuid const& guid : guidsList.guids)
+        {
+            Player* player = ObjectAccessor::FindPlayer(guid);
+
+            if (guid.IsGroup() || IsRealPlayer(player) || IsSelfBot(player))
+            {
+                nonBotFound = true;
+                break;
+            }
+        }
+
+        return nonBotFound;
+    }
+
+    void OnPlayerbotCheckKillTask(Player* player, Unit* victim) override
+    {
+        if (player)
+            GuildTaskMgr::instance().CheckKillTask(player, victim);
+    }
+
+    void OnPlayerbotCheckPetitionAccount(Player* player, bool& found) override
+    {
+        if (!found)
+            return;
+
+        if (PlayerbotsMgr::instance().GetPlayerbotAI(player) != nullptr)
+            found = false;
+    }
+
+    bool OnPlayerbotCheckUpdatesToSend(Player* player) override
+    {
+        PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
+
+        if (botAI == nullptr)
+            return true;
+
+        return IsSelfBot(player);
+    }
+
+    void OnPlayerbotPacketSent(Player* player, WorldPacket const* packet) override
+    {
+        if (player == nullptr)
+            return;
+
+        PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
+
+        if (botAI != nullptr)
+            botAI->HandleBotOutgoingPacket(*packet);
+
+        if (PlayerbotMgr* playerbotMgr = GET_PLAYERBOT_MGR(player))
+            playerbotMgr->HandleMasterOutgoingPacket(*packet);
+    }
+
+    void OnPlayerbotUpdate(uint32 /*diff*/) override
+    {
+        if (sPlayerbotAIConfig.validationMode)
+            return;
+        sRandomPlayerbotMgr.UpdateSessions();  // Per-bot updates only
+    }
+
+    void OnPlayerbotUpdateSessions(Player* player) override
+    {
+        if (player)
+            if (PlayerbotMgr* playerbotMgr = GET_PLAYERBOT_MGR(player))
+                playerbotMgr->UpdateSessions();
+    }
+
+    void OnPlayerbotLogout(Player* player) override
+    {
+        if (PlayerbotMgr* playerbotMgr = GET_PLAYERBOT_MGR(player))
+        {
+            PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
+
+            if (botAI == nullptr || IsSelfBot(player))
+                playerbotMgr->LogoutAllBots();
+        }
+
+        sRandomPlayerbotMgr.OnPlayerLogout(player);
+    }
+
+    void OnPlayerbotLogoutBots() override
+    {
+        LOG_INFO("playerbots", "Logging out all bots...");
+        sRandomPlayerbotMgr.LogoutAllBots();
+    }
+};
+
+class PlayerBotsBGScript : public BGScript
+{
+public:
+    PlayerBotsBGScript() : BGScript("PlayerBotsBGScript") {}
+
+    void OnBattlegroundStart(Battleground* bg) override
+    {
+        BGStrategyData data;
+
+        switch (bg->GetBgTypeID())
+        {
+            case BATTLEGROUND_WS:
+                data.allianceStrategy = urand(0, WS_STRATEGY_MAX - 1);
+                data.hordeStrategy = urand(0, WS_STRATEGY_MAX - 1);
+                break;
+            case BATTLEGROUND_AB:
+                data.allianceStrategy = urand(0, AB_STRATEGY_MAX - 1);
+                data.hordeStrategy = urand(0, AB_STRATEGY_MAX - 1);
+                break;
+            case BATTLEGROUND_AV:
+                data.allianceStrategy = urand(0, AV_STRATEGY_MAX - 1);
+                data.hordeStrategy = urand(0, AV_STRATEGY_MAX - 1);
+                break;
+            case BATTLEGROUND_EY:
+                data.allianceStrategy = urand(0, EY_STRATEGY_MAX - 1);
+                data.hordeStrategy = urand(0, EY_STRATEGY_MAX - 1);
+                break;
+            default:
+                break;
+        }
+
+        BGTactics::SetBotStrategies(bg->GetInstanceID(), data);
+    }
+
+    void OnBattlegroundEnd(Battleground* bg, TeamId /*winnerTeam*/) override
+    {
+        BGTactics::ClearBotStrategies(bg->GetInstanceID());
+    }
+};
+
+// Workaround for missing InitEnabledHooksIfNeeded for new BattlefieldScript in ScriptMgr
+class PlayerbotsBattlefieldScript : public BattlefieldScript
+{
+public:
+    PlayerbotsBattlefieldScript() : BattlefieldScript("PlayerbotsBattlefieldScript") { }
+};
+
+void AddPlayerbotsSecureLoginScripts();
+void AddPlayerbotsSelfBotAfkScripts();
+
+void AddSC_ZulGurubBotScripts();
+void AddSC_MoltenCoreBotScripts();
+void AddSC_MagtheridonBotScripts();
+void AddSC_TempestKeepBotScripts();
+void AddSC_HyjalSummitBotScripts();
+void AddSC_IcecrownBotScripts();
+void AddSC_RubySanctumBotScripts();
+void AddSC_randombot_level_mgr();
+
+void AddSC_coa_bot_damage_scale();
+void AddSC_coa_group_telemetry();
+void AddSC_coa_status_file();
+void AddSC_coa_arena_ready();
+void AddSC_random_bot_transmog();
+void AddSC_coa_leave_instance();
+void AddSC_coa_player_main_tank();
+void AddSC_coa_gardes_menace();
+
+// One entry point per code session, each defined in the session's own file:
+// Economy src/Ai/Coa/Economy/CoaEconomyScripts.cpp, World src/Ai/Coa/World/CoaWorldScripts.cpp,
+// Live src/Ai/Coa/Social/CoaLiveScripts.cpp, Combat src/Ai/Coa/Combat/CoaCombatScripts.cpp.
+// A session registers a new script in its own file, never here.
+void AddCoaEconomyScripts();
+void AddCoaWorldScripts();
+void AddCoaLiveScripts();
+void AddCoaCombatScripts();
+
+void AddPlayerbotsScripts()
+{
+    new PlayerbotsBattlefieldScript();
+    new PlayerbotsDatabaseScript();
+    new PlayerbotsPlayerScript();
+    new PlayerbotsMiscScript();
+    new PlayerbotsServerScript();
+    new PlayerbotsWorldScript();
+    new PlayerbotsScript();
+    new PlayerBotsBGScript();
+    AddPlayerbotsSecureLoginScripts();
+    AddPlayerbotsSelfBotAfkScripts();
+    AddPlayerbotsCommandscripts();
+    PlayerBotsGuildValidationScript();
+    AddSC_ZulGurubBotScripts();
+    AddSC_MoltenCoreBotScripts();
+    AddSC_MagtheridonBotScripts();
+    AddSC_TempestKeepBotScripts();
+    AddSC_HyjalSummitBotScripts();
+    AddSC_IcecrownBotScripts();
+    AddSC_RubySanctumBotScripts();
+    AddSC_randombot_level_mgr();
+    AddSC_coa_bot_damage_scale();
+    AddSC_coa_group_telemetry();
+    AddSC_coa_status_file();
+    AddSC_coa_arena_ready();
+    AddSC_random_bot_transmog();
+    AddSC_coa_leave_instance();
+    AddSC_coa_player_main_tank();
+    AddSC_coa_gardes_menace();
+    AddSC_coa_lfg();
+
+    // Code sessions, in the order they were registered before (hooks shared by two of them keep their call order).
+    AddCoaEconomyScripts();
+    AddCoaWorldScripts();
+    AddCoaLiveScripts();
+    AddCoaCombatScripts();
+}

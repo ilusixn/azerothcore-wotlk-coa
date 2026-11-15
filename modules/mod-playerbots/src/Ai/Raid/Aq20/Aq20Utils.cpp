@@ -1,0 +1,98 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#include "Aq20Utils.h"
+#include "Creature.h"
+#include "ObjectAccessor.h"
+#include "SpellAuras.h"
+#include "Timer.h"
+
+#include <unordered_map>
+
+uint32 const OSSIRIAN_BUFF = 25176;
+uint32 const OSSIRIAN_DEBUFFS[] = {25177, 25178, 25180, 25181, 25183};
+uint32 const OSSIRIAN_CRYSTAL_GO_ENTRY = 180619;
+
+// Conquest of Azeroth (boss_ossirian_coa.cpp): Ossirian puts Sun Disc on himself on engage
+// and removes it on reset. That fight never casts 25176, never applies 25177-25183 and
+// has no crystals (GO 180619). Ossirian still carries 25176 from the stock
+// creature_template_addon, so without this check the move-to-crystal trigger fires on CoA.
+// No SpellDifficulty row, same id on all four difficulties.
+uint32 const OSSIRIAN_COA_SUN_DISC = 2112709;
+
+bool RaidAq20Utils::IsOssirianBuffActive(Unit* ossirian)
+{
+    return ossirian && ossirian->HasAura(OSSIRIAN_BUFF);
+}
+
+int32 RaidAq20Utils::GetOssirianDebuffTimeRemaining(Unit* ossirian)
+{
+    int32 retVal = 0xffffff;
+    if (ossirian)
+    {
+        for (uint32 debuff : OSSIRIAN_DEBUFFS)
+        {
+            if (AuraApplication* auraApplication = ossirian->GetAuraApplication(debuff))
+            {
+                if (Aura* aura = auraApplication->GetBase())
+                {
+                    int32 duration = aura->GetDuration();
+                    if (retVal > duration)
+                        retVal = duration;
+                }
+            }
+        }
+    }
+    return retVal;
+}
+
+GameObject* RaidAq20Utils::GetNearestCrystal(Unit* ossirian)
+{
+    return ossirian ? ossirian->FindNearestGameObject(OSSIRIAN_CRYSTAL_GO_ENTRY, 200.0f) : nullptr;
+}
+
+bool RaidAq20Utils::IsCoaOssirian(Unit* ossirian)
+{
+    return ossirian && ossirian->HasAura(OSSIRIAN_COA_SUN_DISC);
+}
+
+Unit* RaidAq20Utils::GetNearestActiveObelisk(Unit* from)
+{
+    // The trigger and the action both ask, every tick, for the whole fight: the 200 yd grid search is reused for
+    // half a second per bot, as long as the obelisk it found is still active (an overload moves it every 45 s).
+    struct Found
+    {
+        uint32 atMs = 0;
+        ObjectGuid obelisk;
+    };
+    thread_local std::unordered_map<ObjectGuid, Found> cache;
+    constexpr uint32 reuseMs = 500;
+    uint32 const now = getMSTime();
+    auto itr = cache.find(from->GetGUID());
+    if (itr != cache.end() && getMSTimeDiff(itr->second.atMs, now) < reuseMs)
+    {
+        if (itr->second.obelisk.IsEmpty())
+            return nullptr;
+        Creature* kept = ObjectAccessor::GetCreature(*from, itr->second.obelisk);
+        if (kept && kept->IsInWorld() && kept->HasAura(CoaAq20::SPELL_OBELISK_ACTIVE))
+            return kept;
+    }
+
+    std::list<Creature*> triggers;
+    from->GetCreatureListWithEntryInGrid(triggers, CoaAq20::NPC_WORLD_TRIGGER, 200.0f);
+    Unit* best = nullptr;
+    for (Creature* trigger : triggers)
+    {
+        if (!trigger || !trigger->HasAura(CoaAq20::SPELL_OBELISK_ACTIVE))
+            continue;
+        if (!best || from->GetExactDist2d(trigger) < from->GetExactDist2d(best))
+            best = trigger;
+    }
+    if (cache.size() > 512)
+        cache.clear();
+    cache[from->GetGUID()] = {now, best ? best->GetGUID() : ObjectGuid::Empty};
+    return best;
+}

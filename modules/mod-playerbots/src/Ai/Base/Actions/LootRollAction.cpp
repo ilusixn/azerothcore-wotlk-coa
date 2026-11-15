@@ -1,0 +1,367 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#include "LootRollAction.h"
+#include "CoaGearScore.h"
+#include "CoaLive.h"
+#include "CoaRollRule.h"
+#include "ObjectAccessor.h"
+#include "Event.h"
+#include "Group.h"
+#include "ItemUsageValue.h"
+#include "LootAction.h"
+#include "ObjectMgr.h"
+#include "PlayerbotAIConfig.h"
+#include "Playerbots.h"
+
+#include <map>
+#include <mutex>
+
+
+// CMSG_LOOT_ROLL is a world thread opcode (PROCESS_THREADUNSAFE): Group::CountRollVote, run from the bot's map thread,
+// changed the group and gave the item to a winner who may be on another map (Map::SendObjectUpdates crash, 06/11). The
+// vote goes through the bot's session, handled in the world thread like a player's. The roll shows no vote until then,
+// and CountRollVote counts a vote sent twice twice: one vote per bot and roll is sent.
+static void QueueLootRoll(Player* bot, ObjectGuid lootGuid, uint8 vote)
+{
+    static std::mutex lock;
+    static std::map<std::pair<ObjectGuid, ObjectGuid>, uint32> sent;
+    uint32 const now = getMSTime();
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        for (auto itr = sent.begin(); itr != sent.end();)
+            itr = getMSTimeDiff(itr->second, now) > 120000 ? sent.erase(itr) : std::next(itr);
+        if (!sent.emplace(std::make_pair(bot->GetGUID(), lootGuid), now).second)
+            return;
+    }
+    WorldPacket* packet = new WorldPacket(CMSG_LOOT_ROLL, 8 + 4 + 1);
+    *packet << lootGuid;
+    *packet << uint32(0);
+    *packet << vote;
+    bot->GetSession()->QueuePacket(packet);
+}
+
+// CoA Combat: how long this bot has seen this roll open, for the vote it may hold back (CoaRollRule::HoldVote).
+static uint32 RollSeenForMs(Player* bot, ObjectGuid lootGuid)
+{
+    static std::mutex lock;
+    static std::map<std::pair<ObjectGuid, ObjectGuid>, uint32> firstSeen;
+    uint32 const now = getMSTime();
+    std::lock_guard<std::mutex> guard(lock);
+    for (auto itr = firstSeen.begin(); itr != firstSeen.end();)
+        itr = getMSTimeDiff(itr->second, now) > 120000 ? firstSeen.erase(itr) : std::next(itr);
+    auto const [itr, inserted] = firstSeen.emplace(std::make_pair(bot->GetGUID(), lootGuid), now);
+    return inserted ? 0 : getMSTimeDiff(itr->second, now);
+}
+
+bool LootRollAction::Execute(Event /*event*/)
+{
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    std::vector<Roll*> rolls = group->GetRolls();
+    bool voted = false;
+    for (Roll*& roll : rolls)
+    {
+        auto voteItr = roll->playerVote.find(bot->GetGUID());
+        if (voteItr == roll->playerVote.end() || voteItr->second != NOT_EMITED_YET)
+            continue;
+
+        ObjectGuid guid = roll->itemGUID;
+        uint32 itemId = roll->itemid;
+        int32 randomProperty = 0;
+        if (roll->itemRandomPropId)
+            randomProperty = roll->itemRandomPropId;
+        else if (roll->itemRandomSuffix)
+            randomProperty = -((int)roll->itemRandomSuffix);
+
+        RollVote vote = PASS;
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+        if (!proto)
+            continue;
+
+        std::string itemUsageParam;
+        if (randomProperty != 0)
+            itemUsageParam = std::to_string(itemId) + "," + std::to_string(randomProperty);
+        else
+            itemUsageParam = std::to_string(itemId);
+
+        ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", itemUsageParam);
+
+        // Armor Tokens are classed as MISC JUNK (Class 15, Subclass 0), luckily no other items I found have class bits and epic quality.
+        // CoA Combat, gear score: a raid token is a need only when one of the pieces it gives this class is an upgrade
+        // (AiPlayerbot.CoaCombat.GearScore), not on every token the class may use.
+        if (sPlayerbotAIConfig.coaCombatGearScoreEnable && CoaGearScore::IsToken(itemId))
+        {
+            vote = GREED;
+            for (uint32 reward : CoaGearScore::TokenRewardsFor(bot, itemId))
+                if (CoaGearScore::UpgradeGain(bot, reward) > 0.0f)
+                {
+                    vote = NEED;
+                    break;
+                }
+        }
+        else if (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_JUNK && proto->Quality == ITEM_QUALITY_EPIC)
+        {
+            if (CanBotUseToken(proto, bot))
+                vote = NEED; // Eligible for "Need"
+            else
+                vote = GREED; // Not eligible, so "Greed"
+        }
+        else if (usage == ITEM_USAGE_DISENCHANT)
+            vote = sPlayerbotAIConfig.lootRollDisenchant ? DISENCHANT : GREED;
+        else
+        {
+            switch (proto->Class)
+            {
+                case ITEM_CLASS_WEAPON:
+                case ITEM_CLASS_ARMOR:
+                    if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE || usage == ITEM_USAGE_BAD_EQUIP)
+                        vote = NEED;
+                    else if (usage == ITEM_USAGE_KEEP)
+                        vote = NEED;  // an upgrade a few levels on (LootNeedLevelLookahead)
+                    else if (usage != ITEM_USAGE_NONE)
+                        vote = GREED;
+                    break;
+                case ITEM_CLASS_RECIPE:
+                    if (!sPlayerbotAIConfig.lootRollRecipe)
+                        vote = PASS;
+                    else if (usage == ITEM_USAGE_SKILL)
+                        vote = NEED;  // Bot can learn this recipe
+                    else if (proto->Bonding != BIND_WHEN_PICKED_UP)
+                        vote = GREED;  // BoE recipe bot can't learn - GREED for AH/trade
+                    break;
+                default:
+                    if (StoreLootAction::IsLootAllowed(itemId, botAI))
+                        vote = CalculateRollVote(proto, usage);
+                    break;
+            }
+        }
+        // A shirt or a tabard only dresses: a player who wants one gets it before a bot (Twilight's Embrace, #6895).
+        if (vote == NEED && (proto->InventoryType == INVTYPE_BODY || proto->InventoryType == INVTYPE_TABARD))
+            vote = GREED;
+        // CoA Combat, Loot Need refined (AiPlayerbot.CoaCombat.LootNeedEpicOnly, LootNeedMinUpgradePct): a Need kept
+        // only on epic or better, and on gear only for a large enough upgrade over the piece worn; otherwise Greed.
+        if (vote == NEED &&
+            (sPlayerbotAIConfig.coaCombatLootNeedEpicOnly || sPlayerbotAIConfig.coaCombatLootNeedMinUpgradePct > 0.0f))
+        {
+            bool const isGear = proto->Class == ITEM_CLASS_WEAPON || proto->Class == ITEM_CLASS_ARMOR;
+            bool emptySlot = false;
+            float const pct = isGear && sPlayerbotAIConfig.coaCombatLootNeedMinUpgradePct > 0.0f
+                                  ? CoaGearScore::UpgradePct(bot, itemId, randomProperty, emptySlot)
+                                  : 0.0f;
+            if (!CoaRollRule::KeepNeed(proto->Quality >= ITEM_QUALITY_EPIC, isGear, pct, emptySlot,
+                                       sPlayerbotAIConfig.coaCombatLootNeedEpicOnly,
+                                       sPlayerbotAIConfig.coaCombatLootNeedMinUpgradePct))
+                vote = GREED;
+        }
+        // AiPlayerbot.CoaLive.LootNeedAsk: in a dungeon, the bot may first ask the real players whether it may Need
+        // (CoaLive::LootNeedAsk). On their yes it rolls Need; on a no or no answer in time, Greed as without the ask.
+        if (vote == NEED && group->GetLootMethod() != MASTER_LOOT && group->GetLootMethod() != FREE_FOR_ALL)
+        {
+            CoaLootAsk::Outcome const asked = CoaLive::LootNeedAsk(bot, guid, roll->itemSlot, proto, randomProperty,
+                                                                    RollSeenForMs(bot, guid));
+            if (asked == CoaLootAsk::Outcome::Wait)
+                continue;
+            if (asked == CoaLootAsk::Outcome::Need)
+            {
+                QueueLootRoll(bot, guid, NEED);
+                voted = true;
+                continue;
+            }
+            if (asked == CoaLootAsk::Outcome::Greed)
+                vote = GREED;
+        }
+        // The bots' manners (CoaRollRule): Need only when the realm allows it, never against a real player's Need.
+        if (vote == NEED || vote == GREED)
+        {
+            bool realPlayerRolledNeed = false;
+            bool realPlayerStillToVote = false;
+            if (vote == NEED)
+                for (auto const& [voter, theirVote] : roll->playerVote)
+                {
+                    if (voter == bot->GetGUID())
+                        continue;
+                    Player* p = ObjectAccessor::FindPlayer(voter);
+                    if (!p || GET_PLAYERBOT_AI(p))
+                        continue;
+                    if (theirVote == NEED)
+                        realPlayerRolledNeed = true;
+                    else if (theirVote == NOT_EMITED_YET)
+                        realPlayerStillToVote = true;
+                }
+            // At "Bots need items", a bot that wants it waits for the real players who may roll to vote first (or
+            // AiPlayerbot.CoaCombat.LootNeedWaitSeconds); the action runs again on the next tick.
+            if (CoaRollRule::HoldVote(vote == NEED ? CoaRollRule::Vote::Need : CoaRollRule::Vote::Greed,
+                                      sPlayerbotAIConfig.lootNeedRollLevel, realPlayerStillToVote,
+                                      RollSeenForMs(bot, guid), sPlayerbotAIConfig.coaCombatLootNeedWaitMs))
+                continue;
+            CoaRollRule::Vote const polite = CoaRollRule::Polite(
+                vote == NEED ? CoaRollRule::Vote::Need : CoaRollRule::Vote::Greed, sPlayerbotAIConfig.lootNeedRollLevel,
+                vote == NEED && RollUniqueCheck(proto, bot), realPlayerRolledNeed,
+                sPlayerbotAIConfig.lootGreedRollLevel != 0);
+            vote = polite == CoaRollRule::Vote::Need ? NEED : polite == CoaRollRule::Vote::Greed ? GREED : PASS;
+        }
+
+        switch (group->GetLootMethod())
+        {
+            case MASTER_LOOT:
+            case FREE_FOR_ALL:
+                QueueLootRoll(bot, guid, PASS);
+                break;
+            default:
+                QueueLootRoll(bot, guid, vote);
+                break;
+        }
+        voted = true;
+    }
+
+    return voted;
+}
+
+RollVote LootRollAction::CalculateRollVote(ItemTemplate const* proto, ItemUsage usage)
+{
+    if (usage == ITEM_USAGE_NONE)
+    {
+        std::ostringstream out;
+        out << proto->ItemId;
+        usage = AI_VALUE2(ItemUsage, "item usage", out.str());
+    }
+
+    RollVote needVote = PASS;
+    switch (usage)
+    {
+        case ITEM_USAGE_EQUIP:
+        case ITEM_USAGE_REPLACE:
+        case ITEM_USAGE_GUILD_TASK:
+        case ITEM_USAGE_BAD_EQUIP:
+            needVote = NEED;
+            break;
+        case ITEM_USAGE_SKILL:
+        case ITEM_USAGE_USE:
+        case ITEM_USAGE_AH:
+        case ITEM_USAGE_VENDOR:
+            needVote = GREED;
+            break;
+        case ITEM_USAGE_DISENCHANT:
+            needVote = sPlayerbotAIConfig.lootRollDisenchant ? DISENCHANT : GREED;
+            break;
+        default:
+            break;
+    }
+
+    // CoA leveling legendaries are scored on their base template (low stats, a required level scaled for the
+    // player): bots passed on those of their own class (Xorothian Bloodseal #6707, a level 24 one at 21 #6725).
+    // They greed on them, so a player who needs one still wins it.
+    if (needVote == PASS && proto->Quality == ITEM_QUALITY_LEGENDARY && (proto->AllowableClass & bot->getClassMask()) &&
+        proto->RequiredLevel <= bot->GetLevel() + 3)
+        needVote = GREED;
+
+    return StoreLootAction::IsLootAllowed(proto->ItemId, GET_PLAYERBOT_AI(bot)) ? needVote : PASS;
+}
+
+bool MasterLootRollAction::isUseful() { return !IsRealPlayer(botAI->GetMaster()); }
+
+bool MasterLootRollAction::Execute(Event event)
+{
+    Player* bot = QueryItemUsageAction::botAI->GetBot();
+
+    WorldPacket p(event.getPacket());  // WorldPacket packet for CMSG_LOOT_ROLL, (8+4+1)
+    ObjectGuid creatureGuid;
+    uint32 mapId;
+    uint32 itemSlot;
+    uint32 itemId;
+    uint32 randomSuffix;
+    uint32 randomPropertyId;
+    uint32 count;
+    uint32 timeout;
+
+    p.rpos(0);              // reset packet pointer
+    p >> creatureGuid;      // creature guid what we're looting
+    p >> mapId;             /// 3.3.3 mapid
+    p >> itemSlot;          // the itemEntryId for the item that shall be rolled for
+    p >> itemId;            // the itemEntryId for the item that shall be rolled for
+    p >> randomSuffix;      // randomSuffix
+    p >> randomPropertyId;  // item random property ID
+    p >> count;             // items in stack
+    p >> timeout;           // the countdown time to choose "need" or "greed"
+
+    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+    if (!proto)
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    QueueLootRoll(bot, creatureGuid, CalculateRollVote(proto));
+
+    return true;
+}
+
+bool CanBotUseToken(ItemTemplate const* proto, Player* bot)
+{
+    // Get the bitmask for the bot's class
+    uint32 botClassMask = (1 << (bot->getClass() - 1));
+
+    // Check if the bot's class is allowed to use the token
+    if (proto->AllowableClass & botClassMask)
+        return true; // Bot's class is eligible to use this token
+
+    return false; // Bot's class cannot use this token
+}
+
+bool RollUniqueCheck(ItemTemplate const* proto, Player* bot)
+{
+    // Count the total number of the item (equipped + in bags)
+    uint32 totalItemCount = bot->GetItemCount(proto->ItemId, true);
+
+    // Count the number of the item in bags only
+    uint32 bagItemCount = bot->GetItemCount(proto->ItemId, false);
+
+    // Determine if the unique item is already equipped
+    bool isEquipped = (totalItemCount > bagItemCount);
+    if (isEquipped && proto->HasFlag(ITEM_FLAG_UNIQUE_EQUIPPABLE))
+        return true;  // Unique Item is already equipped
+    else if (proto->HasFlag(ITEM_FLAG_UNIQUE_EQUIPPABLE) && (bagItemCount > 1))
+        return true; // Unique item already in bag, don't roll for it
+    return false; // Item is not equipped or in bags, roll for it
+}
+
+bool RollAction::Execute(Event event)
+{
+    std::string link = event.getParam();
+
+    if (link.empty())
+    {
+        bot->DoRandomRoll(0,100);
+        return false;
+    }
+    ItemIds itemIds = chat->parseItems(link);
+    if (itemIds.empty())
+        return false;
+    uint32 itemId = *itemIds.begin();
+    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+    if (!proto)
+    {
+        return false;
+    }
+    std::string itemUsageParam;
+    itemUsageParam = std::to_string(itemId);
+
+    ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", itemUsageParam);
+    switch (proto->Class)
+    {
+        case ITEM_CLASS_WEAPON:
+        case ITEM_CLASS_ARMOR:
+        if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE || usage == ITEM_USAGE_BAD_EQUIP)
+        {
+            bot->DoRandomRoll(0,100);
+        }
+    }
+    return true;
+}

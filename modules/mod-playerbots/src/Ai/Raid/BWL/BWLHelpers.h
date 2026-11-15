@@ -1,0 +1,135 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#ifndef PLAYERBOTS_BWLHELPERS_H
+#define PLAYERBOTS_BWLHELPERS_H
+
+#include "Player.h"
+#include "PlayerbotAI.h"
+
+namespace BlackwingLairHelpers
+{
+    enum class BlackwingLairSpells : uint32
+    {
+        // General
+        SPELL_ONYXIA_SCALE_CLOAK = 22683,
+
+        // Razorgore the Untamed (CoA keeps the stock Orb of Domination, same id)
+        SPELL_MINDCONTROL = 19832,
+
+        // Vaelastrasz the Corrupt
+        SPELL_BURNING_ADRENALINE = 18173,
+
+        // Chromaggus
+        SPELL_BROOD_AFFLICTION_BRONZE = 23170,
+        SPELL_HOURGLASS_SAND = 23645,
+
+        // Nefarian
+        SPELL_WILD_MAGIC = 23410,
+
+        // Conquest of Azeroth (mod-coa-raid-difficulty). Ids without a SpellDifficulty
+        // row are the same on all four difficulties.
+
+        // Nefarian: 22683 or 2111263 protect from Shadow Flame (boss_nefarian_coa.cpp)
+        SPELL_BLACK_DRAGON_SCALE_CLOAK_COA = 2111263,
+
+        // Vaelastrasz: the aura on the player, then its stack aura (SpellDifficulty row 5111)
+        SPELL_BURNING_ADRENALINE_COA = 2110621,
+        SPELL_BURNING_ADRENALINE_COA_STACK_D0 = 2110622,
+        SPELL_BURNING_ADRENALINE_COA_STACK_D1 = 2110623,
+        SPELL_BURNING_ADRENALINE_COA_STACK_D2 = 2110624,
+        SPELL_BURNING_ADRENALINE_COA_STACK_D3 = 2110625,
+
+        // Chromaggus: bronze affliction, the bronze blessing that prevents its removal,
+        // and the Hourglass Sand that item 19183 casts (boss_chromaggus_coa.cpp)
+        SPELL_BROOD_AFFLICTION_BRONZE_COA = 2111016,
+        SPELL_DRAGONFLIGHT_BLESSING_BRONZE_COA = 2111011,
+        SPELL_HOURGLASS_SAND_COA = 2111023
+    };
+
+    enum class BlackwingLairGameObjects : uint32
+    {
+        // General
+        GO_SUPPRESSION_DEVICE = 179784,
+
+        // Razorgore the Untamed
+        GO_BLACK_DRAGON_EGG = 177807
+    };
+
+    enum class BlackwingLairNPCs : uint32
+    {
+        // Broodlord Lashlayer
+        NPC_CORRUPTED_RED_WHELP = 14022,
+        NPC_CORRUPTED_GREEN_WHELP = 14023,
+        NPC_CORRUPTED_BLUE_WHELP = 14024,
+        NPC_CORRUPTED_BRONZE_WHELP = 14025,
+
+        // Trash
+        NPC_DEATH_TALON_WYRMGUARD = 12460,
+
+        // Lord Victor Nefarius / Nefarian
+        NPC_LORD_VICTOR_NEFARIUS = 10162,
+        NPC_NEFARIAN = 11583,
+        // CoA: Dominion's clone of a raid member (boss_nefarian_coa.cpp); every hit it takes lands on
+        // its owner (Spiritual Pain 2111282) and it keeps its health.
+        NPC_SHADOW_CLONE_COA = 9780021
+    };
+
+    constexpr float BROODLORD_SAFE_DISTANCE = 18.0f;
+
+    bool IsActiveSuppressionDeviceInRange(GameObject const* go, Player const* bot);
+    bool AreRazorgoreEggsAlive(PlayerbotAI* botAI);
+    bool IsRazorgoreOffTank(Player* bot);
+    bool IsNonBABotNearPosition(Player const* bot, Position const& position, float distance);
+    bool IsCorruptedWhelp(Unit const* unit);
+    // CoA Nefarian: a Shadow Clone from Dominion, or a raid member Lord Victor Nefarius holds with
+    // "Stupid, Incompetent and Disappointing Minion" (2111217, cannot die meanwhile). Hitting either
+    // only hurts the raid or wastes the damage.
+    bool IsNefarianDoNotAttackTarget(Unit const* unit);
+
+    // Stock or CoA: the unit carries Burning Adrenaline.
+    bool HasBurningAdrenaline(Unit const* unit);
+    // Stock or CoA: the unit wears a cloak aura that protects from Shadow Flame.
+    bool HasShadowFlameCloak(Unit const* unit);
+    // Stock or CoA: the unit carries Brood Affliction: Bronze that Hourglass Sand
+    // can remove (CoA: not while blessed by the bronze dragonflight).
+    bool HasCurableBroodAfflictionBronze(Unit const* unit);
+    // The Hourglass Sand spell that cures the affliction the unit carries.
+    uint32 GetHourglassSandSpell(Unit const* unit);
+
+    // ---- CoA Combat (lot 7, docs/BWL-ETAT-3.0.md), off unless AiPlayerbot.CoaCombat.BlackwingLair.Enable is 1 ----
+    bool BwlCoaFixesOn();
+
+    // F1 / E1: Firemaw's Scorched (2110813..16) stacks on his tank without end; Ebonroc heals himself from what he
+    // deals to the tank under Shadow of Ebonroc (2110837..40). The boss changes tank when its tank is "marked".
+    constexpr uint32 SCORCHED_SWAP_STACKS = 8;
+    // The drake's tank should hand it over (Firemaw: 8 Scorched; Ebonroc: Shadow of Ebonroc).
+    bool IsDrakeTankMarked(Unit const* tank, bool firemaw);
+    // A tank that may take the drake (Firemaw: fewer than half the swap stacks; Ebonroc: no Shadow of Ebonroc).
+    bool CanTakeDrake(Unit const* tank, bool firemaw);
+
+    // C2: Chromaggus' Red affliction (2111012, a disease: 3 % of max health a second) on a raid member who is not
+    // blessed with red (2111007: a cured red comes back within a second).
+    bool HasCurableRedAffliction(Unit const* unit);
+
+    // N1: a Dominion clone (9780021) within `range` of the unit; every hit on the clone lands on its owner.
+    bool IsDominionCloneNear(Unit const* unit, float range);
+
+    // B1: the ranged stand outside Broodlord's Blast Wave, 20 yd on CoA (2101040): 23 yd with the fixes on, the stock
+    // 18 yd otherwise.
+    float BroodlordSafeDistance();
+
+    // C4 / P1-a: standing in a fire, acid or fog patch of Chromaggus, or in Nefarius' Burning Ground.
+    bool IsInBwlGroundEffect(Unit const* unit);
+
+    // G2: Flamegor's Combustion (2110858..61) explodes on the carrier's group when dispelled or when it ends.
+    constexpr float COMBUSTION_CLEAR_YARDS = 10.0f;
+    bool HasCombustion(Unit const* unit);
+    // The closest living raid member within `range` of the bot, or nullptr.
+    Player* NearestRaidMemberWithin(Player* bot, float range);
+}
+
+#endif

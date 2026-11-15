@@ -1,0 +1,245 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#include "TankTargetValue.h"
+#include "CoaOffTank.h"
+#include "AiObjectContext.h"
+#include "AttackersValue.h"
+#include "CoaAltAddon.h"
+#include "CoaPlayerMainTank.h"
+#include "Group.h"
+#include "PlayerbotAI.h"
+#include "Playerbots.h"
+#include "Strategy.h"
+
+class FindTargetForTankStrategy : public FindNonCcTargetStrategy
+{
+public:
+    FindTargetForTankStrategy(PlayerbotAI* botAI) : FindNonCcTargetStrategy(botAI), minThreat(0) {}
+
+    void CheckAttacker(Unit* creature, ThreatManager* threatMgr) override
+    {
+        if (!creature || !creature->IsAlive())
+            return;
+
+        Player* bot = botAI->GetBot();
+        float threat = threatMgr->GetThreat(bot);
+        if (!result)
+        {
+            minThreat = threat;
+            result = creature;
+        }
+        // neglect if victim is main tank, or no victim (for untauntable target)
+        if (Unit* victim = threatMgr->CanHaveThreatList() ? threatMgr->GetCurrentVictim() : creature->GetVictim())
+        {
+            if (victim->ToPlayer() && botAI->IsMainTank(victim->ToPlayer()))
+                return;
+        }
+        if (minThreat >= threat)
+        {
+            minThreat = threat;
+            result = creature;
+        }
+    }
+
+protected:
+    float minThreat;
+};
+
+class FindTankTargetSmartStrategy : public FindTargetStrategy
+{
+public:
+    FindTankTargetSmartStrategy(PlayerbotAI* botAI) : FindTargetStrategy(botAI) {}
+
+    void CheckAttacker(Unit* attacker, ThreatManager* /*threatMgr*/) override
+    {
+        if (Group* group = botAI->GetBot()->GetGroup())
+        {
+            ObjectGuid guid = group->GetTargetIcon(4);
+            if (guid && attacker->GetGUID() == guid)
+                return;
+        }
+
+        if (!attacker->IsAlive())
+            return;
+
+        // A player who tanks for the group ("tank main on") keeps what is on the player; a target this bot gave back
+        // after a swap stays the player's to taunt (SquidBots Lite Main Tank bar).
+        Player* bot = botAI->GetBot();
+        if (CoaPlayerMainTank::HeldByPlayer(bot, attacker) || CoaPlayerMainTank::Released(bot, attacker->GetGUID()))
+            return;
+
+        // Passive summons that hit nobody never give aggro: the tank walked to them (Amanitar mushrooms).
+        if (Creature* creature = attacker->ToCreature())
+            if (creature->HasReactState(REACT_PASSIVE) && !creature->GetVictim())
+                return;
+
+        if (!result || IsBetter(attacker, result))
+            result = attacker;
+    }
+    bool IsBetter(Unit* new_unit, Unit* old_unit)
+    {
+        Player* bot = botAI->GetBot();
+        // A mob running for help hits nobody, so it ranked first and the tank followed it into the next
+        // packs, 7 to 17 times a dungeon (headless runs, 11/10): it comes last (AiPlayerbot.CoaSmartTank).
+        if (sPlayerbotAIConfig.coaSmartTank && IsFleeing(new_unit) != IsFleeing(old_unit))
+            return IsFleeing(old_unit);
+        // CoA Combat, off-tank: what another tank holds comes after every other mob (AiPlayerbot.CoaCombat.OffTank).
+        if (CoaOffTank::IsOffTank(bot))
+        {
+            bool decided = false;
+            bool const before = CoaOffTank::RanksBefore(CoaOffTank::HeldByOtherTank(bot, new_unit),
+                                                        CoaOffTank::HeldByOtherTank(bot, old_unit), decided);
+            if (decided)
+                return before;
+        }
+        // if group has multiple tanks, explicit main tank just focus on the current target
+        Unit* currentTarget = botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+        if (currentTarget && botAI->IsExplicitMainTank(bot) && botAI->GetGroupTankNum(bot) > 1)
+        {
+            if (old_unit == currentTarget)
+                return false;
+
+            if (new_unit == currentTarget)
+                return true;
+        }
+        float new_threat = new_unit->GetThreatMgr().GetThreat(bot);
+        float old_threat = old_unit->GetThreatMgr().GetThreat(bot);
+        float new_dis = bot->GetDistance(new_unit);
+        float old_dis = bot->GetDistance(old_unit);
+        // hasAggro? -> withinMelee? -> threat
+        if (GetIntervalLevel(new_unit) != GetIntervalLevel(old_unit))
+            return GetIntervalLevel(new_unit) > GetIntervalLevel(old_unit);
+
+        int32_t interval = GetIntervalLevel(new_unit);
+        if (interval == 2)
+        {
+            // Of the enemies hitting someone else, the one in the most danger comes first, as a
+            // player tank would peel: nearest only among equals (AiPlayerbot.CoaSmartTank).
+            if (sPlayerbotAIConfig.coaSmartTank)
+            {
+                int32 const newDanger = VictimDanger(new_unit);
+                int32 const oldDanger = VictimDanger(old_unit);
+                if (newDanger != oldDanger)
+                    return newDanger > oldDanger;
+            }
+            return new_dis < old_dis;
+        }
+
+        return new_threat < old_threat;
+    }
+    // How badly the one this enemy is hitting needs the tank: its healer before anyone, whose loss
+    // loses the group; then whoever is lowest; a real player a little before a bot at equal health.
+    int32_t VictimDanger(Unit* enemy)
+    {
+        Player* victim = enemy->GetVictim() ? enemy->GetVictim()->ToPlayer() : nullptr;
+        if (!victim)
+            return 0;
+
+        // By steps of 20%: with the exact health, two loose enemies on victims of close health made
+        // the tank turn from one to the other each time the numbers moved.
+        int32_t danger = (100 - int32_t(victim->GetHealthPct())) / 20 * 20;
+        if (PlayerbotAI::IsHeal(victim))
+            danger += 200;
+        if (!GET_PLAYERBOT_AI(victim))
+            danger += 10;
+        return danger;
+    }
+    static bool IsFleeing(Unit* unit)
+    {
+        if (unit->HasUnitState(UNIT_STATE_FLEEING))
+            return true;
+        switch (unit->GetMotionMaster()->GetCurrentMovementGeneratorType())
+        {
+            case FLEEING_MOTION_TYPE: case ASSISTANCE_MOTION_TYPE: case ASSISTANCE_DISTRACT_MOTION_TYPE:
+            case TIMED_FLEEING_MOTION_TYPE:
+                return true;
+            default:
+                return false;
+        }
+    }
+    int32_t GetIntervalLevel(Unit* unit)
+    {
+        if (!botAI->HasAggro(unit))
+            return 2;
+
+        if (botAI->GetBot()->IsWithinMeleeRange(unit))
+            return 1;
+
+        return 0;
+    }
+};
+
+// The target the player gave this bot ("tank target", "tank swap"): first, while it lives. Once it dies the order
+// ends, its icon goes, the addon hears it, and the bot helps the player main tank on the player's target.
+Unit* TankTargetValue::PinnedOrAssist()
+{
+    uint8 icon = 0xFF;
+    ObjectGuid const pinned = CoaPlayerMainTank::Pinned(bot, &icon);
+    if (!pinned)
+        return nullptr;
+
+    // An enemy back to its spawn after a wipe or a leash (evade) is no order any more (06/11 review, point 8).
+    Unit* target = ObjectAccessor::GetUnit(*bot, pinned);
+    Creature* creature = target ? target->ToCreature() : nullptr;
+    CoaPinEnd const end = CoaPinnedTargetEnd(target != nullptr, target && target->IsAlive(),
+                                             target && target->IsInWorld() && target->GetMap() == bot->GetMap(),
+                                             creature && creature->IsInEvadeMode(),
+                                             target && bot->IsValidAttackTarget(target));
+    if (end == CoaPinEnd::Keep)
+        return target;
+
+    // The order ends like "tank clear" (placement lifted, back to assisting, said and told to the bar): done by the
+    // bot's own update before its engine runs (CoaTankOrderTick), not while the engine reads this value (RC11).
+    CoaPlayerMainTank::MarkEnded(bot, target ? target->GetName() : std::string(), end == CoaPinEnd::Dead);
+    CoaPlayerMainTank::Unpin(bot);
+    if (CoaAltAddon::MasterHasAddon(botAI->GetMaster()))
+        CoaAltAddon::SendToMaster(botAI, "TK\ttarget\tdead\t" + std::to_string(icon == 0xFF ? 0 : uint32(icon) + 1) +
+                                             "\t" + (target ? target->GetName() : std::string("-")));
+    Player* mainTank = CoaPlayerMainTank::FlaggedInGroup(bot->GetGroup(), bot);
+    Unit* assist = mainTank && mainTank->GetTarget() ? ObjectAccessor::GetUnit(*mainTank, mainTank->GetTarget()) : nullptr;
+    if (assist && assist->IsAlive() && assist->GetMap() == bot->GetMap() && bot->IsValidAttackTarget(assist))
+        return assist;
+    return nullptr;
+}
+
+Unit* TankTargetValue::Calculate()
+{
+    if (Unit* pinned = PinnedOrAssist())
+        return pinned;
+
+    GuidSet const exclusions = GatherStrategyTargetExclusions(botAI, TargetValueExclusionType::TankTarget);
+    std::string const rti = botAI->GetAiObjectContext()->GetValue<std::string>("rti")->Get();
+    Unit* rtiTarget = RtiTargetValue::Calculate();
+    // The skull the player put on the boss the player tanks is the player's, not an order to the bot tanks: they took
+    // the boss, its victim being no bot (06/11 review, point 1).
+    if (rtiTarget &&
+        (CoaPlayerMainTank::HeldByPlayer(bot, rtiTarget) || CoaPlayerMainTank::Released(bot, rtiTarget->GetGUID())))
+        rtiTarget = nullptr;
+    if (rtiTarget &&
+        (!sPlayerbotAIConfig.coaExclusionsEverywhere || exclusions.find(rtiTarget->GetGUID()) == exclusions.end()))
+    {
+        Unit* victim = rtiTarget->GetVictim();
+
+        if (victim && victim != bot)
+        {
+            if (Player* victimPlayer = victim->ToPlayer())
+            {
+                // rti target is attacking a non-tank player
+                if (!PlayerbotAI::IsTank(victimPlayer))
+                    return rtiTarget;
+                // rti target is attacking a tank player, check if the tank is a bot and has the same rti setting
+                PlayerbotAI* victimBotAI = GET_PLAYERBOT_AI(victimPlayer);
+                if (!victimBotAI || victimBotAI->GetAiObjectContext()->GetValue<std::string>("rti")->Get() != rti)
+                    return rtiTarget;
+            }
+        }
+    }
+
+    // FindTargetForTankStrategy strategy(botAI);
+    FindTankTargetSmartStrategy strategy(botAI);
+    return FindTarget(&strategy, exclusions);
+}

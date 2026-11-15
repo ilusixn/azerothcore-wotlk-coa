@@ -1,0 +1,39 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#include "RandomBotUpdateAction.h"
+#include "Event.h"
+#include "Playerbots.h"
+
+bool RandomBotUpdateAction::Execute(Event /*event*/)
+{
+    if (!sRandomPlayerbotMgr.IsRandomBot(bot))
+        return false;
+
+    if (bot->GetGroup() && botAI->GetGroupLeader())
+    {
+        PlayerbotAI* groupLeaderBotAI = GET_PLAYERBOT_AI(botAI->GetGroupLeader());
+        if (!groupLeaderBotAI || IsSelfBot(botAI->GetGroupLeader()))
+            return true;
+    }
+
+    // A grouped bot inside a dungeon or raid is never teleported away or randomized: led by a random bot (a dungeon
+    // clear run), its group was disbanded after the third boss of Shadowfang Keep and the leader sent to a zone.
+    if (bot->GetGroup() && bot->GetMap()->IsDungeon())
+        return true;
+
+    // A bot waiting for its player to log back in is not refreshed out of his group meanwhile: the release
+    // of the whole group after AiPlayerbot.CoaOrphanGroupReleaseDelay comes from RandomPlayerbotMgr.
+    if (sPlayerbotAIConfig.coaOrphanGroupReleaseDelay && sRandomPlayerbotMgr.CoaIsOrphanGroup(bot->GetGroup()))
+        return true;
+
+    if (botAI->HasPlayerNearby(sPlayerbotAIConfig.grindDistance))
+        return true;
+
+    return sRandomPlayerbotMgr.ProcessBot(bot);
+}
+
+bool RandomBotUpdateAction::isUseful() { return AI_VALUE(bool, "random bot update"); }

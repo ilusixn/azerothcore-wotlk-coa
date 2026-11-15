@@ -1,0 +1,80 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
+#ifndef PLAYERBOTS_CHECKMOUNTSTATEACTION_H
+#define PLAYERBOTS_CHECKMOUNTSTATEACTION_H
+
+#include "UseItemAction.h"
+#include <mutex>
+#include <unordered_map>
+#include <vector>
+
+const uint16 SPELL_TRAVEL_FORM = 783;
+const uint16 SPELL_FLIGHT_FORM = 33943;
+const uint16 SPELL_SWIFT_FLIGHT_FORM = 40120;
+
+struct MountData
+{
+    bool swiftMount = false;
+    // Outer map: index (0 for ground, 1 for flight), inner map: effect speed -> vector of spell IDs.
+    std::map<uint32, std::map<int32, std::vector<uint32>>> allSpells;
+    // Flying mounts that also carry a ground speed (SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED): the core lets them ride
+    // where nobody can fly, so they stand in for ground mounts when the bot has none. Ground speed -> spell IDs.
+    std::map<int32, std::vector<uint32>> flyersThatRun;
+    // Default mount speed.
+    int32 maxSpeed = 59;
+};
+
+struct PreferredMountCache
+{
+    std::vector<uint32> groundMounts;
+    std::vector<uint32> flightMounts;
+};
+
+class PlayerbotAI;
+
+class CheckMountStateAction : public UseItemAction
+{
+public:
+    CheckMountStateAction(PlayerbotAI* botAI) : UseItemAction(botAI, "check mount state", true) {}
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
+    bool isPossible() override { return true; }
+    bool Mount();
+
+    static void CompleteDismount(Player* bot);
+    // CoA: the "mount" chat command reads and changes the preferred mounts without a restart.
+    static std::vector<uint32> PreferredMounts(uint32 guid, uint8 type);
+    static void SetPreferredMount(uint32 guid, uint8 type, uint32 spellId);
+    static void ClearPreferredMount(uint32 guid, int8 type);
+
+private:
+    Player* master;
+    ShapeshiftForm masterInShapeshiftForm;
+    ShapeshiftForm botInShapeshiftForm;
+    static std::unordered_map<uint32, PreferredMountCache> mountCache;
+    static bool preferredMountTableChecked;
+    static std::mutex mountCacheLock;
+    static void LoadPreferredMounts();
+    bool FollowsMountedMasterBelowMinLevel();
+    float CalculateDismountDistance() const;
+    float CalculateMountDistance() const;
+    void Dismount();
+    void ClearStaleFlightFlags();
+    bool ShouldFollowMasterMountState(Player* master, bool noAttackers, bool shouldMount) const;
+    bool ShouldDismountForMaster(Player* master) const;
+    int32 CalculateMasterMountSpeed(Player* master) const;
+    bool CheckForSwiftMount() const;
+    std::map<uint32, std::map<int32, std::vector<uint32>>> GetAllMountSpells() const;
+    bool TryForms(Player* master, int32 masterMountType, int32 masterSpeed) const;
+    bool TryPreferredMount(Player* master) const;
+    uint32 GetMountType(Player* master) const;
+    uint32 MountTypeFor(Player* master, MountData const& data) const;
+    bool TryRandomMountFiltered(std::map<int32, std::vector<uint32>> const& spells, int32 masterSpeed) const;
+};
+
+#endif

@@ -1,0 +1,8 @@
+---
+description: Always back up characters and migrate them onto every CoA Custom update
+alwaysApply: true
+---
+
+# Character backup and migrate
+
+Before any core/SQL/DBC/repack update on the live CoA realm: dump `acore_auth` + `acore_characters` into `C:\CoA-Repack\Custom\character-backups\` (gzip, timestamp). Copy `worldserver.exe` and `coa.conf` next to that dump. After a new install, run `CoA-Bots\Tools\Migrate-Accounts.bat`. Never wipe character DBs. Restore dump + old exe if the update fails.

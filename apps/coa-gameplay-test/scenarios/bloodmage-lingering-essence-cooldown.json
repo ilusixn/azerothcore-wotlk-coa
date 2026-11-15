@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "name": "Lingering Essence shortens the owned Vampyr's Kiss rank from periodic damage (#647, #9472)",
+  "contract": "Lingering Essence 680695's single effect is SPELL_AURA_PROC_TRIGGER_SPELL (aura 42) on Lingering Essence 680824, a single SPELL_EFFECT_ASCENSION_MODIFY_COOLDOWN with BasePoints -1001 and MiscValue 504275, rank 1 of Vampyr's Kiss. The tooltip is 'Periodic damage and healing done now has a $h% chance to reduce the cooldown of Vampyr's Kiss by $/1000;680824s1 sec' and the record's own ProcChance is 50. A level-80 Bloodmage casts the owned rank 504281, whose cooldown is the one the player sees and Spell::CheckCast enforces, so the reduction must reach 504281, not only rank 1. A control Bloodmage without Lingering Essence casts 504281 immediately afterwards and carries a cooldown at least as long; the tester's 504281 can only fall below it through the procs. Crimson Tide is cast as rank 504134, the rank a level-80 character owns per AscensionSpellProgressionData.h. Its single effect is aura 3 SPELL_AURA_PERIODIC_DAMAGE with Amplitude 3000, DurationIndex 8 (15 s) and MaxAffectedTargets 10, so one cast against seven dummies produces 5 ticks x 7 targets = 35 separate PROC_FLAG_DONE_PERIODIC events, and two casts 15 s apart produce about 70. At 50% per event the chance that none of roughly 70 events procs is beyond astronomical, so the real proc chance is left untouched.",
+  "timeout_ms": 90000,
+  "players": [
+    {
+      "id": "bloodmage",
+      "race": 1,
+      "class": 20,
+      "level": 80,
+      "spell_hit_rating": 10000,
+      "melee_hit_rating": 10000,
+      "expertise_rating": 10000
+    },
+    {
+      "id": "control",
+      "race": 1,
+      "class": 20,
+      "level": 80,
+      "spell_hit_rating": 10000,
+      "melee_hit_rating": 10000,
+      "expertise_rating": 10000
+    }
+  ],
+  "creatures": [
+    {
+      "id": "dummy1",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 4
+    },
+    {
+      "id": "dummy2",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 5
+    },
+    {
+      "id": "dummy3",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 6
+    },
+    {
+      "id": "dummy4",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 7
+    },
+    {
+      "id": "dummy5",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 8
+    },
+    {
+      "id": "dummy6",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 9
+    },
+    {
+      "id": "dummy7",
+      "owner": "bloodmage",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 10
+    },
+    {
+      "id": "control_dummy",
+      "owner": "control",
+      "entry": 36,
+      "health": 1000000,
+      "distance": 4
+    }
+  ],
+  "steps": [
+    {
+      "action": "wait",
+      "label": "Let spawn AI and level scaling settle",
+      "ms": 5000
+    },
+    {
+      "action": "learn",
+      "actor": "bloodmage",
+      "spell": 504134
+    },
+    {
+      "action": "learn",
+      "actor": "bloodmage",
+      "spell": 504281
+    },
+    {
+      "action": "learn",
+      "actor": "bloodmage",
+      "spell": 680695
+    },
+    {
+      "action": "set_power",
+      "actor": "bloodmage",
+      "power": 1,
+      "value": 1000
+    },
+    {
+      "action": "learn",
+      "actor": "control",
+      "spell": 504281
+    },
+    {
+      "action": "set_power",
+      "actor": "control",
+      "power": 1,
+      "value": 1000
+    },
+    {
+      "action": "assert",
+      "label": "The control has no Lingering Essence",
+      "actor": "control",
+      "metric": "knows_spell",
+      "spell": 680695,
+      "equals": 0
+    },
+    {
+      "action": "cast",
+      "actor": "bloodmage",
+      "spell": 504281,
+      "target": "dummy1"
+    },
+    {
+      "action": "cast",
+      "actor": "control",
+      "spell": 504281,
+      "target": "control_dummy"
+    },
+    {
+      "action": "assert",
+      "label": "Vampyr's Kiss is on its full category cooldown",
+      "actor": "bloodmage",
+      "metric": "cooldown_ms",
+      "spell": 504281,
+      "min": 55000,
+      "within_ms": 3000
+    },
+    {
+      "action": "assert",
+      "label": "Rank 1 shares that category cooldown",
+      "actor": "bloodmage",
+      "metric": "cooldown_ms",
+      "spell": 504275,
+      "min": 55000
+    },
+    {
+      "action": "cast",
+      "actor": "bloodmage",
+      "spell": 504134,
+      "target": "dummy1"
+    },
+    {
+      "action": "wait",
+      "label": "Five ticks on every dummy in range",
+      "ms": 15000
+    },
+    {
+      "action": "cast",
+      "actor": "bloodmage",
+      "spell": 504134,
+      "target": "dummy1"
+    },
+    {
+      "action": "wait",
+      "label": "Five more ticks",
+      "ms": 14000
+    },
+    {
+      "action": "snapshot",
+      "label": "The control's remaining Vampyr's Kiss cooldown",
+      "actor": "control",
+      "metric": "cooldown_ms",
+      "spell": 504281,
+      "save_as": "control_cooldown"
+    },
+    {
+      "action": "assert",
+      "label": "DISCRIMINATING: the procs cut the owned Vampyr's Kiss rank below the control's",
+      "actor": "bloodmage",
+      "metric": "cooldown_ms",
+      "spell": 504281,
+      "relative_to": "control_cooldown",
+      "max": -900
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+ "male": {
+  "skins": [
+   "WhimPlayerSkin00",
+   "WhimPlayerSkin01",
+   "WhimPlayerSkin02",
+   "WhimPlayerSkin03",
+   "WhimPlayerSkin04"
+  ],
+  "bodies": [
+   "whim_murloc_redwithe",
+   "whim_murloc_purple",
+   "whim_murloc_green",
+   "whim_murloc_yellow",
+   "whim_murloc_redblack"
+  ],
+  "armors": [
+   "whim_armor01",
+   "whim_armor02",
+   "whim_armor03",
+   "whim_armor04"
+  ]
+ },
+ "female": {
+  "skins": [
+   "MurlocPlayerSkin00",
+   "MurlocPlayerSkin01",
+   "MurlocPlayerSkin02",
+   "MurlocPlayerSkin03",
+   "MurlocPlayerSkin04",
+   "MurlocPlayerSkin05",
+   "MurlocPlayerSkin06",
+   "MurlocPlayerSkin07",
+   "MurlocPlayerSkin08",
+   "MurlocPlayerSkin09",
+   "MurlocPlayerSkin10",
+   "MurlocPlayerSkin11",
+   "MurlocPlayerSkin12",
+   "MurlocPlayerSkin13",
+   "MurlocPlayerSkin14",
+   "MurlocPlayerSkin15",
+   "MurlocPlayerSkin16",
+   "MurlocPlayerSkin17"
+  ],
+  "looks": [
+   "sahauginskin",
+   "sahauginskinblue",
+   "sahauginskingray",
+   "sahauginskinorange",
+   "sahauginskinwhite",
+   "sahauginskinyellowblack",
+   "sahauginskinbluepurple",
+   "sahauginskin_custom_pearl",
+   "murloc2__custom_bloodiedwhite",
+   "red",
+   "pink",
+   "purple",
+   "teal",
+   "gold",
+   "crimson",
+   "shadow",
+   "ice",
+   "toxic"
+  ]
+ }
+}

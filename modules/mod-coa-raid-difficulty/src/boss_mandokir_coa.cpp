@@ -1,0 +1,558 @@
+/*
+ * Bloodlord Mandokir with Ascension's spells.
+ *
+ * Kit: Ascension's block 2118400-2118428. Timings: a Bronzebeard kill on video,
+ * see raid-difficulty-werkzeug/zg-video-zeitplan.json. The Berserker Charge is
+ * the cleanest timer in the whole video: 25.1s, 22 times in a row. Mortal
+ * Strike's repeat, Whirlwind and Fierce Blow follow the CoA combat log of 2026-08-02.
+ *
+ * From stock: the start when the Vilebranch Speaker dies, the ride down, Ohgan
+ * at his side, the chained spirits that revive the dead, and the gaze. Ohgan,
+ * the spirits and the speaker keep their stock scripts, with the spells of the
+ * log. Up on the ledge he can be neither attacked nor selected until the
+ * Speaker dies (live: he engaged 4.1-5.5s after the Speaker's death in 6 of 6
+ * pulls).
+ *
+ *   Berserker Charge  first 10s, every 25s   a random player out of his melee
+ *                                            range he can see, knocked down;
+ *                                            the tank keeps his threat (the
+ *                                            live log: 21 charges, never on
+ *                                            his victim, 13 on ranged players)
+ *   Whirlwind         as the charge lands     at once, 5 yards around him;
+ *                                            in the charge's place when no
+ *                                            one stands out of melee
+ *   Mortal Strike     first 8s,  every 12s   the tank in melee range, -25%
+ *                                            healing, stacks 3
+ *   Threatening Gaze  first 15s, every 20s   he stares at a player for 4s,
+ *                                            then Menacing Gaze for 4s: an
+ *                                            active hostile action (a spell
+ *                                            with a power cost on the global
+ *                                            cooldown) Sentences them to Die
+ *                                            and he Decapitates them
+ *   Execute           the tank below 20%, every 7-14s
+ *   Fierce Blow       first 30.7-31.6s, every 22.5-44s   the tank; later and
+ *                                            rarer than on the other bosses
+ *   Level Up!         +4% damage for every player who dies near him
+ *   Frenzy            when Ohgan dies
+ *   Mounted           while he rides Ohgan before the pull, on Ohgan's own
+ *                     double-size display
+ *   Bloodlord's Presence  at the pull, on enemies within 30 yards: no
+ *                     durability loss; taken off when the fight ends
+ *
+ * Decided here, not in the data:
+ *   - the gaze timer, and the order Threatening Gaze -> Menacing Gaze ->
+ *     Sentenced to Die -> Decapitate; the rule itself is Menacing Gaze's
+ *     tooltip. These auras and Bloodlord's Presence are never logged (their
+ *     spells are flagged so), which is why the log does not show them;
+ *   - Bloodlord's Presence once at the pull; its aura lasts until removed;
+ *   - Mounted only out of combat: the log has Ohgan fighting on his own from
+ *     the first second;
+ *   - Ohgan runs in from the arena entrance at the pull (tester, live,
+ *     2026-11-04); the spot, the gap in the chained spirits' ring on the
+ *     north-west side, is estimated;
+ *   - the order Mortal Strike -> Mortal Strike -> Berserker Charge ->
+ *     Whirlwind on landing (tester, live video, 2026-11-04; the log of
+ *     2026-08-02 starts each Whirlwind as the charge lands); a Mortal Strike
+ *     due during the Whirlwind follows when it ends;
+ *   - Realm of the Blood God (2118425) is left out: the realm's phase 4
+ *     content exists nowhere in the data.
+ *   - the kill-streak auras (First Blood! to Legendary!) at 1, 3, 5, 7 and 10
+ *     kills; they are only a counter in the data.
+ */
+
+#include "CreatureScript.h"
+#include "InstanceScript.h"
+#include "PlayerScript.h"
+#include "ScriptedCreature.h"
+#include "Spell.h"
+#include "SpellAuras.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "../../../src/server/scripts/EasternKingdoms/ZulGurub/zulgurub.h"
+#include "zg_coa_common.h"
+
+#include <list>
+
+using namespace coa_zg;
+
+namespace
+{
+    enum Says
+    {
+        SAY_AGGRO       = 0,
+        SAY_DING_KILL   = 1,
+        SAY_WATCH       = 2,
+        SAY_OHGAN_DEAD  = 4,
+        SAY_GRATS_JINDO = 0
+    };
+
+    enum Spells
+    {
+        SPELL_SUMMON_PLAYER     = 25104,
+
+        SPELL_MORTAL_STRIKE     = 2118401,
+        SPELL_MORTAL_STRIKE_HIT = 2118402,
+        SPELL_MORTAL_WOUND      = 2118403,
+        SPELL_EXECUTE           = 2118404,
+        SPELL_EXECUTE_HIT       = 2118405,
+        SPELL_BERSERKER_CHARGE  = 2118406,
+        SPELL_WHIRLWIND         = 2118408,
+        SPELL_DECAPITATE        = 2118410,
+        SPELL_MOUNTED           = 2118412,
+        SPELL_LEAP              = 2118413,
+        SPELL_BLOODLORDS_PRESENCE = 2118415,
+        SPELL_LEVEL_UP          = 2118416,
+        SPELL_FIRST_BLOOD       = 2118417,
+        SPELL_KILLING_SPREE     = 2118418,
+        SPELL_RAMPAGE           = 2118419,
+        SPELL_UNSTOPPABLE       = 2118420,
+        SPELL_LEGENDARY         = 2118421,
+        SPELL_THREATENING_GAZE  = 2118422,
+        SPELL_MENACING_GAZE     = 2118423,
+        SPELL_SENTENCED_TO_DIE  = 2118424,
+        SPELL_FRENZY            = 2106613,
+
+        SPELL_REVIVE            = 24341,
+    };
+
+    enum Events
+    {
+        EVENT_CHECK_START = 1,
+        EVENT_STARTED,
+        EVENT_BERSERKER_CHARGE,
+        EVENT_WHIRLWIND,
+        EVENT_MORTAL_STRIKE,
+        EVENT_GAZE,
+        EVENT_MENACING_GAZE,
+        EVENT_EXECUTE,
+        EVENT_CHECK_OHGAN,
+        EVENT_FIERCE_BLOW,
+    };
+
+    enum Misc
+    {
+        ACTION_REVIVE        = 2,
+        GUID_SENTENCED       = 1,
+        MODEL_OHGAN_MOUNT    = 215271,
+        POINT_MANDOKIR_END   = 25,
+        CHAINED_SPIRIT_COUNT = 20
+    };
+
+    constexpr uint8 MORTAL_WOUND_STACKS = 3;
+    constexpr Milliseconds MANDOKIR_CHARGE_INTERVAL = 25s;
+    constexpr Milliseconds MANDOKIR_CHARGE_LANDING_FALLBACK = 4s;
+    constexpr Milliseconds MANDOKIR_FIERCE_BLOW_FIRST_MIN = 30700ms;
+    constexpr Milliseconds MANDOKIR_FIERCE_BLOW_FIRST_MAX = 31600ms;
+    constexpr Milliseconds MANDOKIR_FIERCE_BLOW_MIN = 22500ms;
+    constexpr Milliseconds MANDOKIR_FIERCE_BLOW_MAX = 44s;
+
+    Position const PosSummonChainedSpirits[CHAINED_SPIRIT_COUNT] =
+    {
+        { -12167.17f, -1979.330f, 133.0992f, 2.268928f },
+        { -12262.74f, -1953.394f, 133.5496f, 0.593412f },
+        { -12176.89f, -1983.068f, 133.7841f, 2.129302f },
+        { -12226.45f, -1977.933f, 132.7982f, 1.466077f },
+        { -12204.74f, -1890.431f, 135.7569f, 4.415683f },
+        { -12216.70f, -1891.806f, 136.3496f, 4.677482f },
+        { -12236.19f, -1892.034f, 134.1041f, 5.044002f },
+        { -12248.24f, -1893.424f, 134.1182f, 5.270895f },
+        { -12257.36f, -1897.663f, 133.1484f, 5.462881f },
+        { -12265.84f, -1903.077f, 133.1649f, 5.654867f },
+        { -12158.69f, -1972.707f, 133.8751f, 2.408554f },
+        { -12178.82f, -1891.974f, 134.1786f, 3.944444f },
+        { -12193.36f, -1890.039f, 135.1441f, 4.188790f },
+        { -12275.59f, -1932.845f, 134.9017f, 0.174533f },
+        { -12273.51f, -1941.539f, 136.1262f, 0.314159f },
+        { -12247.02f, -1963.497f, 133.9476f, 0.872665f },
+        { -12238.68f, -1969.574f, 133.6273f, 1.134464f },
+        { -12192.78f, -1982.116f, 132.6966f, 1.919862f },
+        { -12210.81f, -1979.316f, 133.8700f, 1.797689f },
+        { -12283.51f, -1924.839f, 133.5170f, 0.069813f }
+    };
+
+    Position const PosMandokir[2] =
+    {
+        { -12167.8f, -1927.25f, 153.73f, 3.76991f },
+        { -12197.86f, -1949.392f, 130.2745f, 0.0f }
+    };
+
+    Position const PosArenaEntrance = { -12274.7f, -1913.96f, 133.34f, 5.92f };
+
+    // From stock: the nearest idle chained spirit revives a fallen player.
+    void RevivePlayer(Unit* victim, ObjectGuid& reviveGUID)
+    {
+        std::list<Creature*> spirits;
+        GetCreatureListWithEntryInGrid(spirits, victim, NPC_CHAINED_SPIRIT, 200.0f);
+        spirits.sort([victim](Creature const* a, Creature const* b) { return a->GetDistance2d(victim) < b->GetDistance2d(victim); });
+        for (Creature* spirit : spirits)
+        {
+            if (!spirit->isMoving() && !spirit->HasUnitState(UNIT_STATE_CASTING))
+            {
+                spirit->AI()->SetGUID(reviveGUID);
+                spirit->AI()->DoAction(ACTION_REVIVE);
+                reviveGUID.Clear();
+                break;
+            }
+        }
+    }
+
+    struct boss_mandokir_coa : public BossAI
+    {
+        boss_mandokir_coa(Creature* creature) : BossAI(creature, DATA_MANDOKIR) { }
+
+        void Reset() override
+        {
+            BossAI::Reset();
+            _kills = 0;
+            _useExecute = false;
+            _whirlwindOnLanding = false;
+            _gazed.Clear();
+            _reviveGUID.Clear();
+            RemovePresence();
+
+            bool const waitingForSpeaker = me->GetPositionZ() > 140.0f;
+            if (waitingForSpeaker)
+            {
+                events.ScheduleEvent(EVENT_CHECK_START, 1s);
+                if (Creature* speaker = ObjectAccessor::GetCreature(*me, instance->GetGuidData(NPC_VILEBRANCH_SPEAKER)))
+                    if (!speaker->IsAlive())
+                        speaker->Respawn(true);
+            }
+
+            me->RemoveAurasDueToSpell(SPELL_FRENZY);
+            me->RemoveAurasDueToSpell(SPELL_LEVEL_UP);
+            for (uint32 streak : { SPELL_FIRST_BLOOD, SPELL_KILLING_SPREE, SPELL_RAMPAGE, SPELL_UNSTOPPABLE, SPELL_LEGENDARY })
+                me->RemoveAurasDueToSpell(streak);
+            SetUntouchable(waitingForSpeaker);
+            instance->SetBossState(DATA_OHGAN, NOT_STARTED);
+            me->Mount(MODEL_OHGAN_MOUNT);
+            DoCastSelf(SPELL_MOUNTED, true);
+        }
+
+        void SetUntouchable(bool untouchable)
+        {
+            me->SetImmuneToAll(untouchable);
+            if (untouchable)
+                me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+            else
+                me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+        }
+
+        void RemovePresence()
+        {
+            me->GetMap()->DoForAllPlayers([](Player* player)
+            {
+                player->RemoveAurasDueToSpell(SPELL_BLOODLORDS_PRESENCE);
+            });
+        }
+
+        void Sentence(ObjectGuid const& guid)
+        {
+            Unit* target = ObjectAccessor::GetUnit(*me, guid);
+            if (!target || !target->IsAlive())
+                return;
+            target->RemoveAurasDueToSpell(SPELL_MENACING_GAZE, me->GetGUID());
+            me->CastSpell(target, SPELL_SENTENCED_TO_DIE, true);
+            me->CastSpell(target, SPELL_LEAP, true);
+            me->CastSpell(target, SPELL_DECAPITATE, true);
+        }
+
+        void JustDied(Unit* /*killer*/) override
+        {
+            std::list<Creature*> spirits;
+            GetCreatureListWithEntryInGrid(spirits, me, NPC_CHAINED_SPIRIT, 200.0f);
+            for (Creature* spirit : spirits)
+                spirit->DespawnOrUnsummon();
+            RemovePresence();
+            instance->SetBossState(DATA_MANDOKIR, DONE);
+            instance->SaveToDB();
+        }
+
+        void JustEngagedWith(Unit* /*who*/) override
+        {
+            _JustEngagedWith();
+            events.ScheduleEvent(EVENT_MORTAL_STRIKE, 8s);
+            events.ScheduleEvent(EVENT_BERSERKER_CHARGE, 10s);
+            events.ScheduleEvent(EVENT_GAZE, 15s);
+            events.ScheduleEvent(EVENT_CHECK_OHGAN, 1s);
+            events.ScheduleEvent(EVENT_FIERCE_BLOW, MANDOKIR_FIERCE_BLOW_FIRST_MIN, MANDOKIR_FIERCE_BLOW_FIRST_MAX);
+
+            me->SetHomePosition(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), me->GetOrientation());
+            Talk(SAY_AGGRO);
+            me->Dismount();
+            me->RemoveAurasDueToSpell(SPELL_MOUNTED);
+            DoCastSelf(SPELL_BLOODLORDS_PRESENCE, true);
+            Position entrance = PosArenaEntrance;
+            me->UpdateGroundPositionZ(entrance.GetPositionX(), entrance.GetPositionY(), entrance.m_positionZ);
+            me->SummonCreature(NPC_OHGAN, entrance, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 35000);
+            for (Position const& pos : PosSummonChainedSpirits)
+                me->SummonCreature(NPC_CHAINED_SPIRIT, pos, TEMPSUMMON_CORPSE_DESPAWN);
+            DoZoneInCombat();
+        }
+
+        // Every player who dies near him levels him up.
+        void KilledUnit(Unit* victim) override
+        {
+            if (!victim->IsPlayer())
+                return;
+
+            _reviveGUID = victim->GetGUID();
+            RevivePlayer(victim, _reviveGUID);
+
+            AddStack(me, me, SPELL_LEVEL_UP);
+            ++_kills;
+            uint32 streak = 0;
+            switch (_kills)
+            {
+                case 1:  streak = SPELL_FIRST_BLOOD;   break;
+                case 3:  streak = SPELL_KILLING_SPREE; break;
+                case 5:  streak = SPELL_RAMPAGE;       break;
+                case 7:  streak = SPELL_UNSTOPPABLE;   break;
+                case 10: streak = SPELL_LEGENDARY;     break;
+                default: break;
+            }
+            if (streak)
+            {
+                DoCastSelf(streak, true);
+                Talk(SAY_DING_KILL);
+                if (_kills == 3)
+                    if (Creature* jindo = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_JINDO)))
+                        if (jindo->IsAlive())
+                            jindo->AI()->Talk(SAY_GRATS_JINDO);
+            }
+        }
+
+        void SetGUID(ObjectGuid const& guid, int32 type) override
+        {
+            if (type == GUID_SENTENCED)
+                Sentence(guid);
+            else
+                _reviveGUID = guid;
+        }
+
+        void MovementInform(uint32 type, uint32 id) override
+        {
+            if (type == POINT_MOTION_TYPE && (id == ::EVENT_CHARGE || id == EVENT_CHARGE_PREPATH) && _whirlwindOnLanding)
+            {
+                _whirlwindOnLanding = false;
+                events.CancelEvent(EVENT_WHIRLWIND);
+                DoCastSelf(SPELL_WHIRLWIND);
+                return;
+            }
+
+            if (type == WAYPOINT_MOTION_TYPE)
+            {
+                me->SetWalk(false);
+                if (id == POINT_MANDOKIR_END)
+                {
+                    me->SetHomePosition(PosMandokir[0]);
+                    instance->SetBossState(DATA_MANDOKIR, NOT_STARTED);
+                }
+            }
+        }
+
+        void DamageDealt(Unit* doneTo, uint32& damage, DamageEffectType /*type*/, SpellSchoolMask /*school*/) override
+        {
+            if (!doneTo || doneTo != me->GetVictim())
+                return;
+            if (doneTo->HealthBelowPctDamaged(20, damage))
+            {
+                if (!_useExecute)
+                {
+                    _useExecute = true;
+                    events.ScheduleEvent(EVENT_EXECUTE, 1s);
+                }
+            }
+            else if (_useExecute)
+            {
+                _useExecute = false;
+                events.CancelEvent(EVENT_EXECUTE);
+            }
+        }
+
+        bool OnTeleportUnreacheablePlayer(Player* player) override
+        {
+            DoCast(player, SPELL_SUMMON_PLAYER, true);
+            return true;
+        }
+
+        void OnSpellCast(SpellInfo const* spell) override
+        {
+            BossAI::OnSpellCast(spell);
+
+            Unit* tank = me->GetVictim();
+            if (!tank)
+                return;
+            if (spell->Id == SPELL_MORTAL_STRIKE)
+            {
+                if (!me->IsWithinMeleeRange(tank))
+                    return;
+                me->CastSpell(tank, SPELL_MORTAL_STRIKE_HIT, true);
+                AddStack(me, tank, SPELL_MORTAL_WOUND, MORTAL_WOUND_STACKS);
+            }
+            else if (spell->Id == SPELL_EXECUTE)
+                me->CastSpell(tank, SPELL_EXECUTE_HIT, true);
+        }
+
+        void UpdateAI(uint32 diff) override
+        {
+            events.Update(diff);
+
+            if (!UpdateVictim())
+            {
+                // From stock: waiting for the speaker, then the ride down.
+                if (instance->GetBossState(DATA_MANDOKIR) == NOT_STARTED || instance->GetBossState(DATA_MANDOKIR) == SPECIAL)
+                {
+                    while (uint32 eventId = events.ExecuteEvent())
+                    {
+                        if (eventId == EVENT_CHECK_START)
+                        {
+                            if (instance->GetBossState(DATA_MANDOKIR) == SPECIAL)
+                            {
+                                me->GetMotionMaster()->MovePoint(0, PosMandokir[1].m_positionX, PosMandokir[1].m_positionY, PosMandokir[1].m_positionZ);
+                                events.ScheduleEvent(EVENT_STARTED, 6s);
+                            }
+                            else
+                                events.ScheduleEvent(EVENT_CHECK_START, 1s);
+                        }
+                        else if (eventId == EVENT_STARTED)
+                        {
+                            SetUntouchable(false);
+                            me->SetInCombatWithZone();
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasUnitState(UNIT_STATE_CHARGING))
+                return;
+
+            while (uint32 eventId = events.ExecuteEvent())
+            {
+                switch (eventId)
+                {
+                    case EVENT_BERSERKER_CHARGE:
+                        if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, [this](Unit const* u)
+                            {
+                                return u->IsPlayer() && !me->IsWithinMeleeRange(u) && me->IsWithinLOSInMap(u);
+                            }))
+                        {
+                            _whirlwindOnLanding = true;
+                            DoCast(target, SPELL_BERSERKER_CHARGE);
+                            events.ScheduleEvent(EVENT_WHIRLWIND, MANDOKIR_CHARGE_LANDING_FALLBACK);
+                        }
+                        else
+                            DoCastSelf(SPELL_WHIRLWIND);
+                        events.ScheduleEvent(EVENT_BERSERKER_CHARGE, MANDOKIR_CHARGE_INTERVAL);
+                        break;
+                    case EVENT_WHIRLWIND:
+                        _whirlwindOnLanding = false;
+                        DoCastSelf(SPELL_WHIRLWIND);
+                        break;
+                    case EVENT_MORTAL_STRIKE:
+                        if (me->GetVictim() && me->IsWithinMeleeRange(me->GetVictim()))
+                        {
+                            DoCastVictim(SPELL_MORTAL_STRIKE);
+                            events.ScheduleEvent(EVENT_MORTAL_STRIKE, 12s);
+                        }
+                        else
+                            events.ScheduleEvent(EVENT_MORTAL_STRIKE, 1s);
+                        break;
+                    case EVENT_GAZE:
+                        if (Unit* player = SelectTarget(SelectTargetMethod::Random, 0, 100.0f, true))
+                        {
+                            me->CastSpell(player, SPELL_THREATENING_GAZE, true);
+                            Talk(SAY_WATCH, player);
+                            _gazed = player->GetGUID();
+                            events.ScheduleEvent(EVENT_MENACING_GAZE, 4s);
+                        }
+                        events.ScheduleEvent(EVENT_GAZE, 20s);
+                        break;
+                    case EVENT_MENACING_GAZE:
+                        if (Unit* target = ObjectAccessor::GetUnit(*me, _gazed))
+                            if (target->IsAlive())
+                                me->CastSpell(target, SPELL_MENACING_GAZE, true);
+                        _gazed.Clear();
+                        break;
+                    case EVENT_EXECUTE:
+                        DoCastVictim(SPELL_EXECUTE);
+                        events.ScheduleEvent(EVENT_EXECUTE, 7s, 14s);
+                        break;
+                    case EVENT_CHECK_OHGAN:
+                        if (instance->GetBossState(DATA_OHGAN) == DONE)
+                        {
+                            DoCastSelf(SPELL_FRENZY, true);
+                            Talk(SAY_OHGAN_DEAD);
+                        }
+                        else
+                            events.ScheduleEvent(EVENT_CHECK_OHGAN, 1s);
+                        break;
+                    case EVENT_FIERCE_BLOW:
+                        DoCastVictim(SPELL_FIERCE_BLOW);
+                        events.ScheduleEvent(EVENT_FIERCE_BLOW, MANDOKIR_FIERCE_BLOW_MIN, MANDOKIR_FIERCE_BLOW_MAX);
+                        break;
+                    default:
+                        break;
+                }
+
+                if (me->HasUnitState(UNIT_STATE_CASTING))
+                    break;
+            }
+
+            DoMeleeAttackIfReady();
+        }
+
+    private:
+        uint8 _kills = 0;
+        bool _useExecute = false;
+        bool _whirlwindOnLanding = false;
+        ObjectGuid _gazed;
+        ObjectGuid _reviveGUID;
+    };
+
+    class mandokir_coa_menacing_gaze : public PlayerScript
+    {
+    public:
+        mandokir_coa_menacing_gaze() : PlayerScript("mandokir_coa_menacing_gaze", { PLAYERHOOK_ON_SPELL_CAST }) { }
+
+        void OnPlayerSpellCast(Player* player, Spell* spell, bool /*skipCheck*/) override
+        {
+            SpellInfo const* info = spell->GetSpellInfo();
+            if (spell->IsTriggered() || info->IsPositive() || !spell->GetPowerCost() || !info->StartRecoveryTime)
+                return;
+            Aura* gaze = player->GetAura(SPELL_MENACING_GAZE);
+            if (!gaze)
+                return;
+            if (Creature* mandokir = ObjectAccessor::GetCreature(*player, gaze->GetCasterGUID()))
+                if (mandokir->IsAIEnabled)
+                    mandokir->AI()->SetGUID(player->GetGUID(), GUID_SENTENCED);
+        }
+    };
+
+    // The Chained Spirit's Resurrection is a dummy with a cast bar; the player stands up when it finishes.
+    class spell_mandokir_coa_resurrection : public SpellScript
+    {
+        PrepareSpellScript(spell_mandokir_coa_resurrection);
+
+        void HandleDummy(SpellEffIndex /*effIndex*/)
+        {
+            if (Player* target = GetHitPlayer())
+                if (!target->IsAlive())
+                    GetCaster()->CastSpell(target, SPELL_REVIVE, true);
+        }
+
+        void Register() override
+        {
+            OnEffectHitTarget += SpellEffectFn(spell_mandokir_coa_resurrection::HandleDummy, EFFECT_0,
+                SPELL_EFFECT_DUMMY);
+        }
+    };
+}
+
+void AddCoaMandokirScripts()
+{
+    RegisterZulGurubCreatureAI(boss_mandokir_coa);
+    RegisterSpellScript(spell_mandokir_coa_resurrection);
+    new mandokir_coa_menacing_gaze();
+}

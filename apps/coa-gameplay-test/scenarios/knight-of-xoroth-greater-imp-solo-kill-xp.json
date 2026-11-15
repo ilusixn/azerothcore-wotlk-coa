@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "name": "A solo kill by the Greater Imp alone gives no experience; the knight hitting it first does",
+  "contract": "SoloKill.RequirePlayerHit (default 1): a player who is not in a group gets loot and experience from a creature only if they hit it themselves with an attack or a harmful spell, so pets, guardians and other summons left to fight on their own (AFK farming) earn nothing. Summon: Greater Imp 520661 is SPELL_EFFECT_SUMMON_PET for creature 510100, taught by the level-10 Greater Imp passive 92101, so the imp is a real Pet owned by the knight. Expected: when the imp alone kills a level-10 Harvest Golem and the knight never swings, the knight's XP does not change. When the knight lands one melee swing on a second golem and the imp finishes it, the knight's XP rises while the knight stays level 10. The golems' 300 health exceeds their template health, so the imp's damage clears the player damage requirement whichever health it was sized from.",
+  "timeout_ms": 300000,
+  "location": { "map": 0, "x": -8917.41, "y": -115.853, "z": 82.3711, "o": 0 },
+  "players": [
+    { "id": "knight", "race": 1, "class": 17, "level": 10, "melee_hit_rating": 10000, "expertise_rating": 10000 }
+  ],
+  "creatures": [
+    { "id": "dummy", "owner": "knight", "entry": 36, "level": 10, "health": 300, "distance": 3 },
+    { "id": "assisted", "owner": "knight", "entry": 36, "level": 10, "health": 300, "distance": 3 }
+  ],
+  "steps": [
+    { "action": "wait", "label": "Let spawn AI settle", "ms": 3000 },
+    { "action": "learn", "actor": "knight", "spell": 92101 },
+    { "action": "set_aura", "actor": "knight", "spell": 92101, "stacks": 1, "label": "Force the Greater Imp passive aura" },
+    {
+      "action": "assert", "label": "SETUP: the Greater Imp passive teaches Summon: Greater Imp",
+      "actor": "knight", "metric": "knows_spell", "spell": 520661, "equals": 1, "within_ms": 3000
+    },
+    { "action": "cast", "actor": "knight", "spell": 520661 },
+    {
+      "action": "assert", "label": "SETUP: the Greater Imp is the knight's pet",
+      "actor": "knight", "metric": "pet_entry", "equals": 510100, "within_ms": 10000
+    },
+    { "action": "wait", "label": "Let the pet's spells and autocast settle", "ms": 1000 },
+    { "action": "snapshot", "actor": "knight", "metric": "xp", "save_as": "xp_before" },
+    { "action": "attack", "actor": "knight", "target": "dummy", "pet": true, "label": "Send only the imp to attack" },
+    {
+      "action": "assert", "label": "SETUP: the Greater Imp kills the golem",
+      "actor": "dummy", "metric": "alive", "equals": 0, "within_ms": 150000
+    },
+    {
+      "action": "assert", "label": "SETUP: the knight never swung at the golem, so the imp killed it alone",
+      "actor": "knight", "metric": "melee_attack_count", "equals": 0
+    },
+    { "action": "wait", "label": "Give any kill reward time to arrive", "ms": 3000 },
+    {
+      "action": "assert", "label": "DISCRIMINATING: the imp's solo kill gives the knight no experience",
+      "actor": "knight", "metric": "xp", "relative_to": "xp_before", "equals": 0
+    },
+    { "action": "attack", "actor": "knight", "target": "assisted", "label": "The knight swings at the second golem" },
+    {
+      "action": "assert", "label": "SETUP: the knight lands a melee swing",
+      "actor": "knight", "metric": "melee_attack_count", "min": 1, "within_ms": 10000
+    },
+    { "action": "stop_attack", "actor": "knight" },
+    { "action": "attack", "actor": "knight", "target": "assisted", "pet": true, "label": "The imp finishes the golem" },
+    {
+      "action": "assert", "label": "SETUP: the second golem dies",
+      "actor": "assisted", "metric": "alive", "equals": 0, "within_ms": 150000
+    },
+    {
+      "action": "assert", "label": "Control: after hitting it, the knight gets experience for the kill",
+      "actor": "knight", "metric": "xp", "relative_to": "xp_before", "min": 1, "within_ms": 3000
+    },
+    {
+      "action": "assert", "label": "The XP gain did not cross a level, so the XP delta is meaningful",
+      "actor": "knight", "metric": "level", "equals": 10
+    }
+  ]
+}

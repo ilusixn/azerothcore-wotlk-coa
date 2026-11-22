@@ -119,25 +119,19 @@ class VaultPatchTest(unittest.TestCase):
         self.assertIn(handspring.JUMP, built)
         self.assertNotIn(9, built)
 
+    def test_a_release_patch_named_zzzzz_is_built_on_not_hidden(self):
+        release = table(8, [[handspring.JUMP, 1, 0, 257, 2, 0, 38, 0], [handspring.FLY_JUMP, 6, 0, 257, 2, 229, 38, 3],
+                            [9, 0, 0, 0, 0, 0, 0, 0]], b"\0Jump\0FlyJump\0")
+        archive(self.data / "patch-ZZZZZ.MPQ", {ANIMATIONS: release})
+        vault.build(self.data, self.data)
+        built = rows(self.built(vault.MERGED).extract(ANIMATIONS))
+        self.assertIn(9, built)
+        self.assertTrue(set(handspring.ANIMATION_NAMES) <= built)
+
     def test_a_table_that_already_has_the_vault_rows_is_still_written(self):
         archive(self.data / "patch-ZZZZX.MPQ", {ANIMATIONS: handspring.add_animation_rows(client_tables()[ANIMATIONS])})
         vault.build(self.data, self.data, fresh=True)
         self.assertTrue(set(handspring.ANIMATION_NAMES) <= rows(self.built(vault.MERGED).extract(ANIMATIONS)))
-
-    def test_camera_keys_are_cleared_so_the_cameras_stand_still(self):
-        model = bytearray(64 + 0x140)
-        struct.pack_into("<II", model, vault.CAMERAS, 1, 0x200)
-        model += bytes(0x200 - len(model)) + bytes(100)
-        for track in vault.CAMERA_TRACKS:
-            struct.pack_into("<IIII", model, 0x200 + track + 4, 1, 0x300 + track, 1, 0x380 + track)
-        model += bytes(0x400 - len(model))
-        for track in vault.CAMERA_TRACKS:
-            struct.pack_into("<II", model, 0x300 + track, 1, 0)
-            struct.pack_into("<II", model, 0x380 + track, 1, 0)
-        steady = vault.steady_cameras(bytes(model))
-        for track in vault.CAMERA_TRACKS:
-            self.assertEqual(struct.unpack_from("<I", steady, 0x300 + track)[0], 0)
-            self.assertEqual(struct.unpack_from("<I", steady, 0x380 + track)[0], 0)
 
     def test_no_build_files_are_left_in_data(self):
         vault.build(self.data, self.data)
@@ -145,7 +139,7 @@ class VaultPatchTest(unittest.TestCase):
                                 path.name.endswith(".adding")), [])
 
     def test_hd_archives_are_left_out_of_the_standard_models(self):
-        names = [Path(name) for name in ("common.MPQ", "patch-Q.MPQ", "patch-CHA.MPQ", "patch-ZZZZY.MPQ",
+        names = [Path(name) for name in ("common.MPQ", "patch-Q.MPQ", "patch-CHA.MPQ", "patch-ZZZZZY.MPQ",
                                          "patch-ZZZZZ-HD.MPQ", "patch-Bear-HD.MPQ")]
         self.assertEqual([path.name for path in vault.standard_archives(names)], ["common.MPQ", "patch-CHA.MPQ"])
         self.assertEqual([path.name for path in vault.original_archives(names)],

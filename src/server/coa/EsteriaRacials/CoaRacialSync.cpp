@@ -72,6 +72,7 @@ void AddSC_CoaEsteriaRacials()
     void AddSC_kyrian_racials();
     void AddSC_venthyr_racials();
     void AddSC_gilgoblin_racials();
+    void AddSC_snagtooth_racials();
 
     new CoaRacialSync();
     AddSC_race_racials();
@@ -83,4 +84,5 @@ void AddSC_CoaEsteriaRacials()
     AddSC_kyrian_racials();
     AddSC_venthyr_racials();
     AddSC_gilgoblin_racials();
+    AddSC_snagtooth_racials();
 }

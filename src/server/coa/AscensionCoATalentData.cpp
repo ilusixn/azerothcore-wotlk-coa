@@ -122,7 +122,7 @@ struct AdvancementClassType
 
 bool IsCoAClassType(AdvancementClassType const& classType)
 {
-    return classType.IsCustomClass && classType.ClassId >= 12 && classType.ClassId <= 32;
+    return classType.IsCustomClass && classType.ClassId >= 12 && classType.ClassId <= 33;
 }
 
 bool IsBorrowOnlyClassType(AdvancementClassType const& classType)
@@ -176,7 +176,7 @@ bool LoadCoATalentData()
         uint32 const key = record.GetUInt32(ESSENCE_KEY);
         uint32 const level = record.GetUInt32(ESSENCE_LEVEL);
         bool const stockKey = key >= 1 && key <= 11 && key != 10;
-        if ((key < 12 || key > 32) && !(stockKey && unified) || !level || level > 255)
+        if ((key < 12 || key > 33) && !(stockKey && unified) || !level || level > 255)
             continue;
         if (record.GetUInt32(ESSENCE_FLAGS) || record.GetUInt32(ESSENCE_FLAGS + 1) ||
             record.GetUInt32(ESSENCE_FLAGS + 2) || record.GetUInt32(ESSENCE_FLAGS + 3))

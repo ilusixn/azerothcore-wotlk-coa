@@ -235,9 +235,8 @@ bool IsMortalAbilityForm(uint32 form)
 bool HasWeaponHidingForm(Player const* player, Aura const* ignored = nullptr)
 {
     for (uint32 form : CursedForms)
-        if (!IsMortalAbilityForm(form))
-            if (Aura const* aura = player->GetAura(form, player->GetGUID());
-                aura && aura != ignored && !sScriptMgr->OnPlayerKeepsOwnLook(player, form))
+        if (!IsMortalAbilityForm(form) && !sScriptMgr->OnPlayerKeepsOwnLook(player, form))
+            if (Aura const* aura = player->GetAura(form, player->GetGUID()); aura && aura != ignored)
                 return true;
     return false;
 }
@@ -819,7 +818,7 @@ class aura_ascension_bloodmage_animated_blood_leech : public AuraScript
         Unit* actor = event.GetActor();
         Unit* victim = event.GetActionTarget();
         Player* owner = actor ? ObjectAccessor::GetPlayer(*actor, actor->GetOwnerGUID()) : nullptr;
-        return owner && owner->getClass() == CLASS_SON_OF_ARUGAL && owner->IsAlive() &&
+        return owner && UsesAscensionClassMechanics(owner, CLASS_SON_OF_ARUGAL) && owner->IsAlive() &&
             victim && victim != owner && !owner->IsFriendlyTo(victim) && damage && damage->GetDamage();
     }
 
@@ -1618,6 +1617,20 @@ public:
             info->AttributesCu &= ~SPELL_ATTR0_CU_NEGATIVE;
 
         ApplyBloodmageConditionalContracts(info);
+
+        if (info->Id == AscensionBloodmage::EmpoweredIndicator && info->Effects[EFFECT_1].IsAura(SPELL_AURA_DUMMY))
+            if (SpellInfo const* mend = sSpellMgr->GetSpellInfo(AscensionBloodmage::EmpoweredMend))
+                if (SpellEffectInfo const& instant = mend->Effects[EFFECT_1];
+                    instant.IsAura(SPELL_AURA_ADD_PCT_MODIFIER) && instant.MiscValue == SPELLMOD_CASTING_TIME)
+                {
+                    SpellEffectInfo& effect = info->Effects[EFFECT_1];
+                    effect.ApplyAuraName = instant.ApplyAuraName;
+                    effect.MiscValue = instant.MiscValue;
+                    effect.BasePoints = instant.BasePoints;
+                    effect.DieSides = instant.DieSides;
+                    effect.RealPointsPerLevel = instant.RealPointsPerLevel;
+                    effect.SpellClassMask = instant.SpellClassMask;
+                }
 
         if (info->Id == SPELL_BLOOD_SCENT &&
             info->Effects[EFFECT_0].ApplyAuraName == SPELL_AURA_ADD_FLAT_MODIFIER &&

@@ -40,6 +40,7 @@ void AddAscensionEquippedGearLootScripts();
 void AddSC_AscensionPvpPower();
 void AddSC_AscensionResilientConstitution();
 void AddSC_AscensionPowerTooltips();
+void AddSC_AscensionTotemTooltipStrings();
 void AddSC_AscensionPvePower();
 void AddSC_AscensionItemPower();
 void AddSC_AscensionMountSpeed();
@@ -87,6 +88,7 @@ void AddSC_CoAOtherSideEmbryo();
 void AddSC_CoAOtherSideTrash();
 void AddSC_CoAVaults();
 void AddSC_CoABlackrockCaverns();
+void AddSC_CoABlackrockDepths();
 void AddSC_CoADungeonCompletion();
 void AddSC_CoADungeonSpoils();
 void AddSC_CoADungeonLoot();
@@ -102,6 +104,7 @@ void AddSC_AscensionProfessionSpellAffect();
 void AddSC_AscensionPerforatingShots();
 void AddSC_AscensionSummonedEffects();
 void AddSC_AscensionTaxiGuardians();
+void AddSC_AscensionGuardianTravel();
 void AddSC_AscensionSummonAvoidance();
 void AddSC_AscensionSummonDamage();
 void AddSC_AscensionKeepersScrollZoneBuff();
@@ -466,6 +469,7 @@ void AddSC_AscensionLfgObjective();
 void AddSC_AscensionBushcraft();
 void AddSC_AscensionVoidPortal();
 void AddSC_AscensionWoollyPride();
+void AddSC_AscensionIdleGaze();
 
 void AddSC_XPHotspots();
 
@@ -862,6 +866,7 @@ void AddCoAScripts()
     AddSC_AscensionPvpPower();
     AddSC_AscensionResilientConstitution();
     AddSC_AscensionPowerTooltips();
+    AddSC_AscensionTotemTooltipStrings();
     AddSC_AscensionPvePower();
     AddSC_AscensionItemPower();
     AddSC_AscensionMountSpeed();
@@ -909,6 +914,7 @@ void AddCoAScripts()
     AddSC_CoAOtherSideTrash();
     AddSC_CoAVaults();
     AddSC_CoABlackrockCaverns();
+    AddSC_CoABlackrockDepths();
     AddSC_CoADungeonCompletion();
     AddSC_CoADungeonSpoils();
     AddSC_CoADungeonTuning();
@@ -923,6 +929,7 @@ void AddCoAScripts()
     AddSC_AscensionPerforatingShots();
     AddSC_AscensionSummonedEffects();
     AddSC_AscensionTaxiGuardians();
+    AddSC_AscensionGuardianTravel();
     AddSC_AscensionSummonAvoidance();
     AddSC_AscensionSummonDamage();
     AddSC_AscensionKeepersScrollZoneBuff();
@@ -934,4 +941,5 @@ void AddCoAScripts()
     AddSC_AscensionBushcraft();
     AddSC_AscensionVoidPortal();
     AddSC_AscensionWoollyPride();
+    AddSC_AscensionIdleGaze();
 }

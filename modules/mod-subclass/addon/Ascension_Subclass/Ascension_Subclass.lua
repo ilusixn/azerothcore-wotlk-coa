@@ -610,6 +610,10 @@ local function RenderTree(tree, canvas)
     local strip = abilityRows * (NODE + 6) + (abilityRows > 0 and 18 or 0)
     local width, height = canvas:GetWidth() - NODE * 2, canvas:GetHeight() - NODE * 2 - 50 - strip
     local spanX, spanY = (maxX or 0) - (minX or 0), (maxY or 0) - (minY or 0)
+    local unit = math.min(spanX > 0 and width / spanX or math.huge, spanY > 0 and height / spanY or math.huge,
+        NODE * (30 + 14) / 30)
+    local left = NODE + (width - spanX * unit) / 2
+    local bottom = strip + NODE + (height - spanY * unit) / 2
     local centers, sharing = {}, {}
     for _, node in ipairs(tree.nodes) do
         local x, y = Position(node.entry, grid)
@@ -623,8 +627,8 @@ local function RenderTree(tree, canvas)
     for index, node in ipairs(tree.nodes) do
         local x, y = Position(node.entry, grid)
         local spot = sharing[x .. ":" .. y]
-        local cx = NODE + (spanX > 0 and (x - minX) / spanX * width or width / 2)
-        local cy = strip + NODE + (spanY > 0 and (maxY - y) / spanY * height or height / 2)
+        local cx = left + (x - (minX or 0)) * unit
+        local cy = bottom + ((maxY or 0) - y) * unit
         local px = cx + (node.choice - (#spot + 1) / 2) * (NODE + 6)
         local py = (#spot > 1 and asOne) and cy + NODE + 8 or cy
         centers[node.id] = (#spot > 1 and asOne) and { cx, cy } or { px, py }
@@ -1370,11 +1374,11 @@ local function CyclopsPreviewOf(itemId)
     return path or nil
 end
 
-local SHEET_FIT = { zoom = 0.8, right = 0.45, up = -0.47 }
+
+local SHEET_FIT = { zoom = 0.7, right = 0.3, up = -0.55, facing = 0 }
 
 local function SheetFit()
-    local saved = Ascension_SubclassDump and Ascension_SubclassDump.sheetFit
-    return saved or SHEET_FIT
+    return Ascension_SubclassDump and Ascension_SubclassDump.sheetFit or SHEET_FIT
 end
 
 local function Inside(inner, outer)
@@ -1418,10 +1422,10 @@ local function FitSheetModel(frame)
     local fit = SheetFit()
     local x, y, z = model:GetPosition()
     if math.abs(x - fit.zoom) > 0.001 or math.abs(y - fit.right) > 0.001 or math.abs(z - fit.up) > 0.001 then
-        if model.SetCamera then
-            model:SetCamera(1)
-        end
         model:SetPosition(fit.zoom, fit.right, fit.up)
+        if model.SetFacing then
+            model:SetFacing(fit.facing or 0)
+        end
     end
 end
 
@@ -1900,6 +1904,12 @@ local function Receive(message)
             end
         elseif name and Ascension_SubclassDump and Ascension_SubclassDump.debugCasts then
             DEFAULT_CHAT_FRAME:AddMessage(string.format("%s could not cast %s (result %s)", who, name, result))
+        end
+        return
+    end
+    if command == "PETOWNER" then
+        if Ascension_Subclass.OnPetOwner then
+            Ascension_Subclass.OnPetOwner(rest)
         end
         return
     end
@@ -3828,17 +3838,18 @@ SlashCmdList.ASCENSIONSUBCLASS = function(message)
     elseif message == "stancebar reset" then
         Ascension_Subclass.ResetStanceBar()
     elseif message:find("^sheet") then
-        local zoom, right, up = message:match("^sheet%s+(%S+)%s+(%S+)%s+(%S+)$")
+        local zoom, right, up, facing = message:match("^sheet%s+(%S+)%s+(%S+)%s+(%S+)%s*(%S*)$")
         Ascension_SubclassDump = Ascension_SubclassDump or {}
         if zoom then
             Ascension_SubclassDump.sheetFit = { zoom = tonumber(zoom) or 0, right = tonumber(right) or 0,
-                up = tonumber(up) or 0 }
+                up = tonumber(up) or 0, facing = tonumber(facing) or 0 }
         elseif message == "sheet reset" then
             Ascension_SubclassDump.sheetFit = nil
         end
         local fit = SheetFit()
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("Subclass: character window model zoom %.2f, right %.2f, up %.2f "
-            .. "(/subclass sheet <zoom> <right> <up>, /subclass sheet reset)", fit.zoom, fit.right, fit.up))
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("Subclass: character window model zoom %.2f, right %.2f, up %.2f, "
+            .. "turn %.2f (/subclass sheet <zoom> <right> <up> <turn>, /subclass sheet reset)", fit.zoom, fit.right,
+            fit.up, fit.facing or 0))
     elseif message == "art" then
         for index, tree in ipairs(state.trees) do
             DEFAULT_CHAT_FRAME:AddMessage(string.format("Subclass tree %d: %s / %s (spec %s) -> %s", index,

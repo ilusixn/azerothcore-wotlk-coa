@@ -219,6 +219,7 @@ typedef std::list<std::string> StoreProblemList;
 
 uint32 DBCFileCount = 0;
 static std::string sDBCPath;
+static std::string sOverlayDBCPath;
 
 static bool LoadDBC_assert_print(uint32 fsize, uint32 rsize, std::string const& filename)
 {
@@ -289,6 +290,7 @@ void LoadDBCStores(std::string const& dataPath)
     std::string customDbcPath = dataPath + "dbc_races/";
     bool const customRacesEnabled = sConfigMgr->GetOption<bool>("CoACustomRaces.Enable", false);
     sDBCPath = dbcPath;
+    sOverlayDBCPath = dataPath + "dbc_skinshifter/";
 
     StoreProblemList bad_dbc_files;
     uint32 availableDbcLocales = 0xFFFFFFFF;
@@ -586,7 +588,7 @@ void LoadDBCStores(std::string const& dataPath)
 
             // store class talent tab pages
             for (uint32 cls = 1; cls < MAX_CLASSES; ++cls)
-                if (talentTabInfo->ClassMask & (1 << (cls - 1)))
+                if (talentTabInfo->ClassMask & ClassMaskBit(cls))
                     sTalentTabPages[cls][talentTabInfo->tabpage] = talentTabId;
         }
     }
@@ -737,6 +739,11 @@ void LoadDBCStores(std::string const& dataPath)
 
 std::string GetClientDBCPath(std::string_view fileName)
 {
+    // mod-skinshifter lays its class's rows over the client tables in DataDir/dbc_skinshifter/.
+    std::string const overlay = sOverlayDBCPath + std::string(fileName);
+    std::error_code error;
+    if (!sOverlayDBCPath.empty() && std::filesystem::is_regular_file(overlay, error))
+        return overlay;
     return sDBCPath + std::string(fileName);
 }
 
@@ -1020,7 +1027,7 @@ SkillRaceClassInfoEntry const* GetSkillRaceClassInfo(uint32 skill, uint8 race, u
             continue;
         }
 
-        if (itr->second->ClassMask && !(itr->second->ClassMask & (uint32(1) << (class_ - 1))))
+        if (itr->second->ClassMask && !(itr->second->ClassMask & SkillClassMaskBit(class_)))
         {
             continue;
         }

@@ -43,6 +43,7 @@ Read the relevant sections when needed for the work. Do not read every guide or 
 - Spell/quest ranks, acquisition, expected behavior, execution paths and regression links →
   `apps/coa-mechanics/README.md` (compact mechanic maps)
 - Finding gameplay regression scenarios or checking recorded results → `apps/coa-gameplay-test/README.md`
+- Class conformance (tooltip → behaviour proof per class) → `docs/coa/class-conformance.md`
 - Scoped source checks (boundaries, registrations, tooling regressions) →
   `python -B tools/verify_all.py --stages source --base <ref>`; `report.json` and `source.log` list the suites
   it selected (`--plan` shows only the command).
@@ -84,8 +85,9 @@ repository. Fetching upstream is separate from reviewing, merging, building or d
 
 ## Maintaining guidance
 
-Keep only stable conventions and essential routing here. Update guidance when requested or when a durable
-correction is needed; do not automatically offer lesson capture, install skills, or append task histories.
+Keep only stable conventions and essential routing here; rules belong in `.agents/rules/`, task guides in
+`.agents/docs/`, workflows in the skill. Update guidance when requested or when a durable correction is needed;
+do not automatically offer lesson capture, install skills, or append task histories.
 
 <!-- changelog:start (managed by coa-server-build/changelog/changelog.py sync-instructions) -->
 ## Changelog (shared by all CoA repositories)

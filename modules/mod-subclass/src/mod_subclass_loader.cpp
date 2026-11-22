@@ -8,6 +8,14 @@ void AddSC_mod_subclass_relic();
 void AddSC_mod_subclass_bots();
 void AddSC_mod_subclass_quests();
 void AddSC_mod_subclass_spellbook();
+void AddSC_mod_subclass_pairs();
+void AddSC_mod_subclass_two_players();
+void AddSC_mod_subclass_two_players_racials();
+void AddSC_mod_subclass_two_players_share();
+void AddSC_mod_subclass_two_players_quests();
+void AddSC_mod_subclass_two_players_auras();
+void AddSC_mod_subclass_bot_quest_route();
+void AddSC_mod_subclass_two_players_courier();
 
 void Addmod_subclassScripts()
 {
@@ -17,4 +25,12 @@ void Addmod_subclassScripts()
     AddSC_mod_subclass_bots();
     AddSC_mod_subclass_quests();
     AddSC_mod_subclass_spellbook();
+    AddSC_mod_subclass_pairs();
+    AddSC_mod_subclass_two_players();
+    AddSC_mod_subclass_two_players_racials();
+    AddSC_mod_subclass_two_players_share();
+    AddSC_mod_subclass_two_players_quests();
+    AddSC_mod_subclass_two_players_auras();
+    AddSC_mod_subclass_bot_quest_route();
+    AddSC_mod_subclass_two_players_courier();
 }

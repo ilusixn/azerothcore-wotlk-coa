@@ -194,7 +194,7 @@ public:
         Player* player = spell->GetCaster()->ToPlayer();
         SpellInfo const* info = spell->GetSpellInfo();
         if (!player || !UsesAscensionClassMechanics(player, CLASS_RANGER) || miss != SPELL_MISS_NONE || !target ||
-            target == player || !target->IsAlive() || !IsRangerSpell(info))
+            !IsRangerSpell(info))
             return;
 
         if (!damage)

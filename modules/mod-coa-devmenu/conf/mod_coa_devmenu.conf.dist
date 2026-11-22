@@ -1,0 +1,58 @@
+[worldserver]
+
+###################################################################################################
+# DEV MENU (in-game NPC editor, client addon CoA_DevMenu, /dev)
+#
+#    DevMenu.Enable
+#        Description: Answer the addon's requests.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled)
+
+DevMenu.Enable = 1
+
+#    DevMenu.MinSecurity
+#        Description: Lowest account security level allowed to use the menu.
+#        Default:     2 - (Game master)
+#                     3 - (Administrator)
+
+DevMenu.MinSecurity = 2
+
+###################################################################################################
+
+#    DevMenu.Items.FirstId
+#        Description: First id of the 9999 item ids the "Create an item" tab uses. 0 = 9400001. Change it only if those ids are taken.
+#        Default:     0
+
+DevMenu.Items.FirstId = 0
+
+#    DevMenu.Items.ClientData
+#        Description: The game client's Data folder on this machine, for the "Make client item patch" button
+#                     (Create an item > Items created). The button writes the client's Item.dbc with your server's
+#                     items in it, which fixes red question marks in the bags and weapons that do not count as weapons.
+#                     Empty = found automatically: the game you press the button in (same machine as the server),
+#                     else the WoW registry entry, else a client in the folders around the server.
+#                     Example: "C:/World of Warcraft/Data"
+#        Default:     ""
+
+DevMenu.Items.ClientData = ""
+
+#    DevMenu.Items.PatchName
+#        Description: Name of the client patch the button writes. Empty = chosen for you: one that loads after the
+#                     archive holding the client's Item.dbc (patch-ZZZZZZI.MPQ on clients that load long names,
+#                     else a free one-letter name like patch-Z.MPQ, which stock 3.3.5 clients load).
+#                     Set it only to force a name; the tool refuses one that would load too early.
+#        Default:     ""
+
+DevMenu.Items.PatchName = ""
+
+#    DevMenu.Items.Python
+#        Description: Python 3 command the button runs. Empty = "python" on Windows, "python3" elsewhere.
+#        Default:     ""
+
+DevMenu.Items.Python = ""
+
+#    DevMenu.Items.PatchTool
+#        Description: Path of tools/items/make_item_patch.py. Empty = the copy in this module's source folder.
+#        Default:     ""
+
+DevMenu.Items.PatchTool = ""

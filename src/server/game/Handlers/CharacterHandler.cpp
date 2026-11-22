@@ -443,6 +443,16 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recvData)
         return;
     }
 
+    // Class 33 stays in the database when the switch is off, so people who already made one can log in.
+    // New ones are refused here even if a client still draws the button.
+    if (createInfo->Class == 33 &&
+        (!sConfigMgr->GetOption<bool>("Skinshifter.Enable", true) ||
+         !sConfigMgr->GetOption<bool>("Skinshifter.Class.Enable", true)))
+    {
+        SendCharCreate(CHAR_CREATE_DISABLED);
+        return;
+    }
+
     if (createInfo->Class == 10 && IsAscensionCompatEnabled() &&
         sConfigMgr->GetOption<bool>("CoA.MapClass10ToWarrior", false))
     {
@@ -509,7 +519,7 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recvData)
     if (!HasPermission(rbac::RBAC_PERM_SKIP_CHECK_CHARACTER_CREATION_CLASSMASK))
     {
         uint32 classMaskDisabled = sWorld->getIntConfig(CONFIG_CHARACTER_CREATING_DISABLED_CLASSMASK);
-        if ((uint32(1) << (createInfo->Class - 1)) & classMaskDisabled)
+        if (ClassMaskBit(createInfo->Class) & classMaskDisabled)
         {
             SendCharCreate(CHAR_CREATE_DISABLED);
             return;

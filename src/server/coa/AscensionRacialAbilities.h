@@ -114,7 +114,7 @@ inline bool CanLearn(SkillLineAbilityEntry const& ability, uint8 raceId, uint8 c
         ability.MinSkillLineRank <= 1 && !ability.SupercededBySpell &&
         (!ability.RaceMask || (ability.RaceMask & (uint32(1) << ((raceId - 1) & 31)))) &&
         (IsClassVariantOutsideDbcMask(ability.Spell, classId) || !ability.ClassMask ||
-            (ability.ClassMask & (uint32(1) << (classId - 1))));
+            (ability.ClassMask & ClassMaskBit(classId)));
 }
 }
 

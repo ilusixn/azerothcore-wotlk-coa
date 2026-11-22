@@ -11618,7 +11618,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         return false;
     }
 
-    if (!(pProto->AllowableClass & getClassMask()) && pProto->Bonding == BIND_WHEN_PICKED_UP && !IsGameMaster())
+    if (!ItemClassMaskAllows(pProto->AllowableClass, getClass()) && pProto->Bonding == BIND_WHEN_PICKED_UP && !IsGameMaster())
     {
         SendBuyError(BUY_ERR_CANT_FIND_ITEM, nullptr, item, 0);
         return false;
@@ -12539,7 +12539,6 @@ void Player::SendInitialPacketsBeforeAddToMap()
     SendUnlearnSpells();
 
     SendInitialActionButtons();
-    m_reputationMgr->ApplyStartingZoneReputation();
     m_reputationMgr->SendInitialReputations();
     m_achievementMgr->SendAllAchievementData();
 

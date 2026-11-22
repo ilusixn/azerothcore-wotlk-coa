@@ -16,6 +16,7 @@
  */
 
 #include "Group.h"
+#include "GroupSharedSlots.h"
 #include "AreaDefines.h"
 #include "Battleground.h"
 #include "BattlegroundMgr.h"
@@ -434,14 +435,17 @@ bool Group::AddMember(Player* player, uint8 roles /* = 0 */)
     if (!player)
         return false;
 
-    // Get first not-full group
+    // Get first not-full group; a rider sharing a body joins its body's group
     uint8 subGroup = 0;
-    if (m_subGroupsCounts)
+    ObjectGuid const ridersBody = BodyOfRider(player->GetGUID());
+    if (m_subGroupsCounts && ridersBody && IsMember(ridersBody))
+        subGroup = GetMemberGroup(ridersBody);
+    else if (m_subGroupsCounts)
     {
         bool groupFound = false;
         for (; subGroup < MAX_RAID_SUBGROUPS; ++subGroup)
         {
-            if (m_subGroupsCounts[subGroup] < MAXGROUPSIZE)
+            if (HasFreeSlotSubGroup(subGroup))
             {
                 groupFound = true;
                 break;
@@ -1918,12 +1922,37 @@ void Group::SendUpdateToPlayer(ObjectGuid playerGUID, MemberSlot* slot)
         data << uint32(sLFGMgr->GetDungeon(m_guid));
     }
 
+    // two heads sharing a body take one place in the list: others see the body, the rider sees itself; a head
+    // played by a bot stays listed to the other head, whose bot controls need it, while a party (not a raid) has room
+    // for it
+    auto const oneBody = [&](MemberSlot const& member)
+    {
+        if (slot->guid == member.guid)
+            return false;
+        ObjectGuid const body = BodyOfRider(member.guid);
+        if (body && IsMember(body))
+            return false;
+        return BodyOfRider(slot->guid) != member.guid;
+    };
+    auto const botPartner = [&](MemberSlot const& member)
+    {
+        if (BodyOfRider(member.guid) != slot->guid && BodyOfRider(slot->guid) != member.guid)
+            return false;
+        Player const* partner = ObjectAccessor::FindConnectedPlayer(member.guid);
+        return partner && partner->GetSession() && partner->GetSession()->IsBot();
+    };
+    bool const roomForBotPartner = !isRaidGroup() &&
+        std::count_if(m_memberSlots.begin(), m_memberSlots.end(), oneBody) < MAXGROUPSIZE - 1;
+    auto const listed = [&](MemberSlot const& member)
+    {
+        return oneBody(member) || (roomForBotPartner && botPartner(member));
+    };
     data << m_guid;
     data << uint32(m_counter++);                        // 3.3, value increases every time this packet gets sent
-    data << uint32(GetMembersCount() - 1);
+    data << uint32(std::count_if(m_memberSlots.begin(), m_memberSlots.end(), listed));
     for (member_citerator citr = m_memberSlots.begin(); citr != m_memberSlots.end(); ++citr)
     {
-        if (slot->guid == citr->guid)
+        if (!listed(*citr))
             continue;
 
         Player* member = ObjectAccessor::FindConnectedPlayer(citr->guid);
@@ -2044,6 +2073,14 @@ void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
     if (slot == m_memberSlots.end())
         return;
 
+    // A rider sharing a body moves with its body
+    ObjectGuid const body = BodyOfRider(guid);
+    if (body && IsMember(body) && GetMemberGroup(body) != group)
+    {
+        ChangeMembersGroup(body, group);
+        return;
+    }
+
     // Abort if the player is already in the target sub group
     uint8 prevSubGroup = GetMemberGroup(guid);
     if (prevSubGroup == group)
@@ -2078,6 +2115,15 @@ void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
             player->GetOriginalGroupRef().setSubGroup(group);
     }
 
+    for (MemberSlot const& member : m_memberSlots)
+    {
+        if (BodyOfRider(member.guid) == guid && member.group != group)
+        {
+            ChangeMembersGroup(member.guid, group);
+            break;
+        }
+    }
+
     // Broadcast the changes to the group
     SendUpdate();
 }
@@ -2093,6 +2139,17 @@ void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
 //      the current RR player is checked to be near the looted object.
 //      if yes, no update done.
 //      if not, he loses his turn.
+// a head seated in another member's body cannot walk to a corpse; when either head is a bot, the body loots
+static bool RidesWithBotAsLooter(Group const* group, Player const* player)
+{
+    ObjectGuid const body = BodyOfRider(player->GetGUID());
+    if (!body || !group->IsMember(body) || !player->GetVehicleBase() || player->GetVehicleBase()->GetGUID() != body)
+        return false;
+    Player const* bodyPlayer = ObjectAccessor::FindConnectedPlayer(body);
+    auto const isBot = [](Player const* head) { return head && head->GetSession() && head->GetSession()->IsBot(); };
+    return isBot(player) || isBot(bodyPlayer);
+}
+
 void Group::UpdateLooterGuid(WorldObject* pLootedObject, bool ifneed)
 {
     // round robin style looting applies for all low
@@ -2108,7 +2165,7 @@ void Group::UpdateLooterGuid(WorldObject* pLootedObject, bool ifneed)
         {
             // not update if only update if need and ok
             Player* looter = ObjectAccessor::FindPlayer(guid_itr->guid);
-            if (looter && looter->IsAtLootRewardDistance(pLootedObject))
+            if (looter && looter->IsAtLootRewardDistance(pLootedObject) && !RidesWithBotAsLooter(this, looter))
                 return;
         }
         ++guid_itr;
@@ -2119,7 +2176,7 @@ void Group::UpdateLooterGuid(WorldObject* pLootedObject, bool ifneed)
     for (member_citerator itr = guid_itr; itr != m_memberSlots.end(); ++itr)
     {
         if (Player* player = ObjectAccessor::FindPlayer(itr->guid))
-            if (player->IsAtLootRewardDistance(pLootedObject))
+            if (player->IsAtLootRewardDistance(pLootedObject) && !RidesWithBotAsLooter(this, player))
             {
                 pNewLooter = player;
                 break;
@@ -2132,7 +2189,7 @@ void Group::UpdateLooterGuid(WorldObject* pLootedObject, bool ifneed)
         for (member_citerator itr = m_memberSlots.begin(); itr != guid_itr; ++itr)
         {
             if (Player* player = ObjectAccessor::FindPlayer(itr->guid))
-                if (player->IsAtLootRewardDistance(pLootedObject))
+                if (player->IsAtLootRewardDistance(pLootedObject) && !RidesWithBotAsLooter(this, player))
                 {
                     pNewLooter = player;
                     break;
@@ -2494,9 +2551,51 @@ void Group::SetLfgRoles(ObjectGuid guid, const uint8 roles)
     SendUpdate();
 }
 
+namespace
+{
+ObjectGuid (*s_bodyOfRider)(ObjectGuid) = nullptr;
+
+uint32 GroupCapacity(Group const* group)
+{
+    return group->isRaidGroup() ? MAXRAIDSIZE : MAXGROUPSIZE;
+}
+}
+
+void SetBodyOfRider(ObjectGuid (*bodyOfRider)(ObjectGuid rider))
+{
+    s_bodyOfRider = bodyOfRider;
+}
+
+ObjectGuid BodyOfRider(ObjectGuid rider)
+{
+    return s_bodyOfRider ? s_bodyOfRider(rider) : ObjectGuid::Empty;
+}
+
+// A rider sharing a body with another member does not take a slot of its own
+uint32 SharedGroupSlots(Group const* group)
+{
+    uint32 shared = 0;
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        ObjectGuid const body = BodyOfRider(slot.guid);
+        if (body && group->IsMember(body))
+            ++shared;
+    }
+    return shared;
+}
+
+bool GroupHasRoomFor(Group const* group, ObjectGuid joiner)
+{
+    if (!group->IsFull())
+        return true;
+    ObjectGuid const body = BodyOfRider(joiner);
+    return body && group->IsMember(body) &&
+        group->GetMembersCount() < GroupCapacity(group) + SharedGroupSlots(group) + 1;
+}
+
 bool Group::IsFull() const
 {
-    return isRaidGroup() ? (m_memberSlots.size() >= MAXRAIDSIZE) : (m_memberSlots.size() >= MAXGROUPSIZE);
+    return GetMembersCount() >= GroupCapacity(this) + SharedGroupSlots(this);
 }
 
 bool Group::isLFGGroup(bool restricted /*= false*/) const
@@ -2615,7 +2714,16 @@ bool Group::SameSubGroup(ObjectGuid guid1, MemberSlot const* slot2) const
 
 bool Group::HasFreeSlotSubGroup(uint8 subgroup) const
 {
-    return (m_subGroupsCounts && m_subGroupsCounts[subgroup] < MAXGROUPSIZE);
+    if (!m_subGroupsCounts)
+        return false;
+    uint32 counted = 0;
+    for (MemberSlot const& slot : m_memberSlots)
+    {
+        ObjectGuid const body = BodyOfRider(slot.guid);
+        if (slot.group == subgroup && (!body || !IsMember(body)))
+            ++counted;
+    }
+    return counted < MAXGROUPSIZE;
 }
 
 uint8 Group::GetMemberGroup(ObjectGuid guid) const

@@ -73,6 +73,11 @@ std::string TwinWearing(Player const* player);
 void EchoCyclopsHelmet(Player* player);
 std::string RelicState(Player* player);
 std::string HandleRelicMessage(Player* player, std::vector<std::string_view> const& words);
+void HandlePairMessage(Player* player, std::vector<std::string_view> const& words);
+void SendBotPlans(Player* player);
+void BotPlanDoNow(Player* player, std::string_view botName, uint32 questId);
+void BotPlanMoveUp(Player* player, std::string_view botName, uint32 questId);
+void BotPlanIgnore(Player* player, std::string_view botName, uint32 questId, bool ignore);
 std::string TwinState(Player const* player);
 std::string CyclopsModelState(Player const* player);
 std::string CyclopsPreview(uint32 itemId);
@@ -81,11 +86,14 @@ bool SubclassResting(Player const* player);
 bool LonelyTwin(Player const* player);
 bool OrderBrother(Player* player, uint32 spellId, Unit* target);
 void PressForOtherHalf(Player* player, uint32 spellId);
+bool TwoPlayersPressLent(Player* player, uint32 spellId);
 void SendTwinGearToCharacterSelect(WorldSession* session);
+void SendMutatedToCharacterSelect(WorldSession* session);
 std::vector<uint32> KnownBorrowedActives(Player const* player);
 bool OffersStandardMains();
 bool SubclassRaceEnabled(uint8 race);
 bool ForcedBot(Player const* player);
+uint32 TwoPlayersPartnerOf(uint32 guid);
 void AssignBotSubclass(Player* player);
 void SpendBotPoints(Player* player);
 void ForgetBotPlayer(Player const* player);
@@ -325,6 +333,49 @@ std::string PlainClassName(uint8 classId)
 constexpr uint16 MiscPlayerDataPayload = 0x77D;
 constexpr uint32 CharacterSelectSubclassesId = 0x53554243;
 
+std::string CharacterSelectEntry(std::string const& name, std::string const& line, std::string color,
+    std::string const& pair)
+{
+    if (color == "-")
+        color.clear();
+    std::string entry = Acore::StringFormat("\"{}\":{{\"name\":\"{}\",\"color\":\"{}\"", name, line, color);
+    if (!pair.empty())
+        entry += Acore::StringFormat(",\"pair\":\"{}\"", pair);
+    return entry + "}";
+}
+
+void SendCharacterSelectPayload(WorldSession* session, std::string const& payload)
+{
+    WorldPacket packet(MiscPlayerDataPayload, 4 + payload.size() + 1);
+    packet << CharacterSelectSubclassesId << payload;
+    session->SendPacket(&packet);
+}
+
+void AddPairsToCharacterSelect(WorldSession* session, std::string payload)
+{
+    session->QueueQueryCallback(CharacterDatabase.AsyncQuery(Acore::StringFormat(
+        "SELECT `c`.`name`, `o`.`name`, `o`.`class`, `c`.`guid` = `t`.`left_guid` FROM `characters` AS `c` "
+        "JOIN `mod_subclass_two_players` AS `t` ON `c`.`guid` IN (`t`.`left_guid`, `t`.`right_guid`) "
+        "JOIN `characters` AS `o` ON `o`.`guid` = IF(`c`.`guid` = `t`.`left_guid`, `t`.`right_guid`, `t`.`left_guid`) "
+        "WHERE `c`.`account` = {} AND `c`.`deleteInfos_Name` IS NULL", session->GetAccountId())).WithCallback(
+        [session, payload](QueryResult result) mutable
+        {
+            if (result)
+                do
+                {
+                    Field* fields = result->Fetch();
+                    std::string const name = fields[0].Get<std::string>();
+                    std::string const partner = fields[1].Get<std::string>();
+                    uint8 const partnerClass = fields[2].Get<uint8>();
+                    bool const left = fields[3].Get<int64>() != 0;
+                    payload += (payload.size() > 1 ? "," : "") + CharacterSelectEntry(name,
+                        PlainClassName(partnerClass), ClassColorHex(partnerClass),
+                        left ? name + "'" + partner : partner + "'" + name);
+                } while (result->NextRow());
+            SendCharacterSelectPayload(session, payload + "}");
+        }));
+}
+
 void SendSubclassesToCharacterSelect(WorldSession* session)
 {
     session->QueueQueryCallback(CharacterDatabase.AsyncQuery(Acore::StringFormat(
@@ -339,16 +390,10 @@ void SendSubclassesToCharacterSelect(WorldSession* session)
                 {
                     Field* fields = result->Fetch();
                     uint8 const subClass = fields[1].Get<uint8>();
-                    std::string color = ClassColorHex(subClass);
-                    if (color == "-")
-                        color.clear();
-                    payload += Acore::StringFormat("{}\"{}\":{{\"name\":\"{}\",\"color\":\"{}\"}}",
-                        payload.size() > 1 ? "," : "", fields[0].Get<std::string>(), PlainClassName(subClass), color);
+                    payload += (payload.size() > 1 ? "," : "") + CharacterSelectEntry(fields[0].Get<std::string>(),
+                        PlainClassName(subClass), ClassColorHex(subClass), "");
                 } while (result->NextRow());
-            payload += "}";
-            WorldPacket packet(MiscPlayerDataPayload, 4 + payload.size() + 1);
-            packet << CharacterSelectSubclassesId << payload;
-            session->SendPacket(&packet);
+            AddPairsToCharacterSelect(session, payload);
         }));
 }
 
@@ -370,7 +415,9 @@ std::mutex& subclassMutex = *new std::mutex;
 Subclass::Settings settings;
 std::atomic<bool> thinHumanEnabled{ true };
 std::atomic<bool> twoHeadedOgreEnabled{ true };
+std::atomic<bool> twoPlayersEnabled{ true };
 std::atomic<bool> forceBots{ false };
+std::atomic<bool> anyRaceBots{ false };
 std::atomic<bool> travelFormsWholeBody{ true };
 std::atomic<uint32> brotherMirrorDisplay{ 977602 };
 std::vector<Subclass::Pair> pairs;
@@ -411,8 +458,18 @@ Subclass::Settings CurrentSettings()
     return settings;
 }
 
+bool BorrowsTheOgreStory(Player const* player)
+{
+    uint8 const race = player->getRace();
+    WorldSession const* session = player->GetSession();
+    return anyRaceBots && forceBots && session && session->IsBot() && race != Subclass::TwoHeadedOgreRace &&
+        race != Subclass::ThinHumanRace;
+}
+
 Subclass::Character CharacterOf(Player const* player)
 {
+    if (BorrowsTheOgreStory(player))
+        return { Subclass::TwoHeadedOgreRace, GENDER_FEMALE, player->getClass(), player->GetLevel() };
     return { player->getRace(), StoryGenderOf(player), player->getClass(), player->GetLevel() };
 }
 
@@ -656,7 +713,7 @@ bool MainMaySubclass(uint8 classId);
 
 bool MayCarrySubclass(Player const* player)
 {
-    return MainMaySubclass(player->getClass()) && SubclassRaceEnabled(player->getRace());
+    return MainMaySubclass(player->getClass()) && SubclassRaceEnabled(CharacterOf(player).Race);
 }
 
 bool MainMaySubclass(uint8 classId)
@@ -669,7 +726,7 @@ bool MainMaySubclass(uint8 classId)
 
 bool IsEligible(Player const* player)
 {
-    if (!MayCarrySubclass(player))
+    if (!CurrentSettings().Enabled || !MayCarrySubclass(player))
         return false;
     std::lock_guard<std::mutex> lock(subclassMutex);
     return Subclass::IsEligible(pairs, CharacterOf(player));
@@ -677,7 +734,7 @@ bool IsEligible(Player const* player)
 
 std::vector<Subclass::Tree> OpenTreesOf(Player const* player)
 {
-    if (!MayCarrySubclass(player))
+    if (!CurrentSettings().Enabled || !MayCarrySubclass(player))
         return {};
     Subclass::Choice const choice = ChoiceOf(player);
     bool const hasClassTree = HasClassTree(choice.SubClass);
@@ -788,6 +845,11 @@ bool HandlesOwnPet(SpellInfo const* info)
 std::unordered_set<uint32> runesLent;
 std::unordered_set<uint16> tankSpecializations;
 std::unordered_set<uint16> distantSpecializations;
+std::unordered_map<uint16, Subclass::SpecializationRoles> specializationRoles;
+std::unordered_map<uint8, Subclass::SpecializationRoles> classRoles;
+constexpr uint32 ChrClassesFields = 56;
+constexpr uint32 ChrClassesToken = 55;
+constexpr uint32 ChrSpecsClassToken = 1;
 constexpr uint32 ChrSpecsFields = 29;
 constexpr uint32 ChrSpecsMeleeRole = 11;
 constexpr uint32 ChrSpecsRangedRole = 12;
@@ -800,6 +862,18 @@ void LoadSpecializationRoles()
     ClientDBC specs;
     std::unordered_set<uint16> tanks;
     std::unordered_set<uint16> distant;
+    std::unordered_map<uint16, Subclass::SpecializationRoles> roleTable;
+    std::unordered_map<uint8, Subclass::SpecializationRoles> rolesOfClasses;
+    std::unordered_map<std::string, uint8> classOfToken;
+    ClientDBC classes;
+    if (classes.Load(GetClientDBCPath("ChrClasses.dbc"), ChrClassesFields))
+        for (uint32 row = 0; row < classes.GetRecordCount(); ++row)
+        {
+            ClientDBC::Record record = classes.GetRecord(row);
+            std::string token(record.GetString(ChrClassesToken));
+            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+            classOfToken[token] = uint8(record.GetUInt32(0));
+        }
     if (specs.Load(GetClientDBCPath("ChrSpecs.dbc"), ChrSpecsFields))
         for (uint32 row = 0; row < specs.GetRecordCount(); ++row)
         {
@@ -812,11 +886,18 @@ void LoadSpecializationRoles()
                 tanks.insert(specId);
             if (Subclass::KeepsDistance(roles))
                 distant.insert(specId);
+            roleTable[specId] = roles;
+            std::string token(record.GetString(ChrSpecsClassToken));
+            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+            if (auto const owner = classOfToken.find(token); owner != classOfToken.end())
+                rolesOfClasses[owner->second] = Subclass::Joined(rolesOfClasses[owner->second], roles);
         }
     LOG_INFO("module", "mod-subclass: {} tank and {} ranged specialization(s)", tanks.size(), distant.size());
     std::lock_guard<std::mutex> lock(subclassMutex);
     tankSpecializations = std::move(tanks);
     distantSpecializations = std::move(distant);
+    specializationRoles = std::move(roleTable);
+    classRoles = std::move(rolesOfClasses);
 }
 
 constexpr uint32 AdvancementFields = 121;
@@ -1289,6 +1370,8 @@ void LearnFromAddon(Player* player, uint32 entryId, uint32 rank)
     SendSubclassState(player);
 }
 
+std::string PetOwnerState(Player const* player);
+
 void HandleAddonMessage(Player* player, std::string_view message)
 {
     if (message == "SYNC")
@@ -1309,6 +1392,11 @@ void HandleAddonMessage(Player* player, std::string_view message)
             ShowPrompt(player, player->GetGUID());
         return;
     }
+    if (message == "PETOWNER")
+    {
+        SendAddon(player, PetOwnerState(player));
+        return;
+    }
     if (message == "AIM")
     {
         AimAtTarget(player);
@@ -1323,7 +1411,8 @@ void HandleAddonMessage(Player* player, std::string_view message)
     std::vector<std::string_view> const words = Acore::Tokenize(message, ' ', false);
     if (words.size() == 2 && words[0] == "PRESS")
     {
-        if (Optional<uint32> spellId = Acore::StringTo<uint32>(words[1]))
+        if (Optional<uint32> spellId = Acore::StringTo<uint32>(words[1]); spellId &&
+            !TwoPlayersPressLent(player, *spellId))
             PressForOtherHalf(player, *spellId);
         return;
     }
@@ -1374,6 +1463,16 @@ void HandleAddonMessage(Player* player, std::string_view message)
             ChatHandler(player->GetSession()).SendSysMessage(refusal);
         SendAddon(player, RelicState(player));
     }
+    else if (!words.empty() && (words[0].starts_with("PAIR") || words[0].starts_with("COURIER")))
+        HandlePairMessage(player, words);
+    else if (words.size() == 1 && words[0] == "BOTPLAN")
+        SendBotPlans(player);
+    else if (words.size() == 3 && words[0] == "BOTPLANNOW")
+        BotPlanDoNow(player, words[1], Acore::StringTo<uint32>(words[2]).value_or(0));
+    else if (words.size() == 3 && words[0] == "BOTPLANUP")
+        BotPlanMoveUp(player, words[1], Acore::StringTo<uint32>(words[2]).value_or(0));
+    else if (words.size() == 3 && (words[0] == "BOTPLANIGNORE" || words[0] == "BOTPLANALLOW"))
+        BotPlanIgnore(player, words[1], Acore::StringTo<uint32>(words[2]).value_or(0), words[0] == "BOTPLANIGNORE");
     else if (words.size() == 1 && words[0] == "CYCLOPSECHO")
     {
         EchoCyclopsHelmet(player);
@@ -1417,13 +1516,15 @@ std::vector<uint32> TaughtBy(Trainer::Trainer const* trainer)
     return taught;
 }
 
+void DropClassSkill(Player* player, uint16 skillId);
+
 uint32 ForgetStandardKit(Player* player, uint8 playableClass)
 {
     std::vector<uint32> const own = TaughtBy(ClassTrainerOf(player->getClass()));
     std::vector<uint16> const ownLines = ClassSkillLinesOf(own);
     for (uint16 skill : ClassSkillLinesOf(TaughtBy(ClassTrainerOf(playableClass))))
         if (player->HasSkill(skill) && std::find(ownLines.begin(), ownLines.end(), skill) == ownLines.end())
-            player->SetSkill(skill, 0, 0, 0);
+            DropClassSkill(player, skill);
     uint32 removed = 0;
     for (uint32 spellId : TaughtBy(ClassTrainerOf(playableClass)))
         if (player->HasSpell(spellId) && std::find(own.begin(), own.end(), spellId) == own.end())
@@ -1549,7 +1650,31 @@ uint32 ForgetBorrowedBaseSpells(Player* player, uint8 subClass)
 bool IsClassSkillLine(uint16 skillId)
 {
     SkillLineEntry const* skillLine = sSkillLineStore.LookupEntry(skillId);
-    return skillLine && skillLine->categoryId == SKILL_CATEGORY_CLASS;
+    return skillLine && skillLine->categoryId == SKILL_CATEGORY_CLASS && skillId != SKILL_MOUNTS &&
+        skillId != SKILL_COMPANIONS;
+}
+
+bool IsCollectedSpell(uint32 spellId)
+{
+    SkillLineAbilityMapBounds const bounds = sSpellMgr->GetSkillLineAbilityMapBounds(spellId);
+    return std::any_of(bounds.first, bounds.second, [](auto const& entry)
+    {
+        return entry.second->SkillLine == SKILL_MOUNTS || entry.second->SkillLine == SKILL_COMPANIONS;
+    });
+}
+
+void DropClassSkill(Player* player, uint16 skillId)
+{
+    std::vector<uint32> kept;
+    for (SkillLineAbilityEntry const* ability : GetSkillLineAbilitiesBySkillLine(skillId))
+    {
+        uint32 const spellId = sSpellMgr->GetFirstSpellInChain(ability->Spell);
+        if (player->HasSpell(spellId) && IsCollectedSpell(spellId))
+            kept.push_back(spellId);
+    }
+    player->SetSkill(skillId, 0, 0, 0);
+    for (uint32 spellId : kept)
+        player->learnSpell(spellId, false);
 }
 
 bool OwnClassSkill(Player const* player, uint16 skillId)
@@ -1566,7 +1691,7 @@ void ForgetBorrowedSkillLines(Player* player, uint8 subClass)
     for (AscensionLiveBaseline::Skill const& skill : AscensionLiveBaseline::Skills)
         if (skill.ClassId == subClass && IsClassSkillLine(skill.SkillId) && player->HasSkill(skill.SkillId) &&
             !OwnClassSkill(player, skill.SkillId))
-            player->SetSkill(skill.SkillId, 0, 0, 0);
+            DropClassSkill(player, skill.SkillId);
 }
 
 void SyncBorrowedSkillLines(Player* player, uint8 subClass)
@@ -1836,6 +1961,21 @@ void KeepStockAutoShot(Player* player)
     player->removeSpell(copy, SPEC_MASK_ALL, false);
 }
 
+uint32 ForgetStrayBorrowedCopies(Player* player)
+{
+    std::vector<uint32> stray;
+    for (auto const& [spellId, known] : player->GetSpellMap())
+        if (known->State != PLAYERSPELL_REMOVED && spellId > BookCopyOffset && BookCopies().contains(spellId) &&
+            !IsBorrowedSpell(player, spellId - BookCopyOffset))
+            stray.push_back(spellId);
+    if (player->HasSpell(StockAutoShot) && player->getClass() != CLASS_HUNTER &&
+        !IsBorrowedSpell(player, StockAutoShot) && !OwnClassGrants(player, StockAutoShot))
+        stray.push_back(StockAutoShot);
+    for (uint32 spellId : stray)
+        player->removeSpell(spellId, SPEC_MASK_ALL, false);
+    return stray.size();
+}
+
 uint32 PreferBorrowedBookCopies(Player* player)
 {
     KeepStockAutoShot(player);
@@ -1928,24 +2068,56 @@ uint32 SyncBorrowedBaseSpells(Player* player)
     return learned;
 }
 
+bool PetFromSubclass(Player const* player)
+{
+    Pet const* pet = player->GetPet();
+    if (!pet)
+        return false;
+    if (uint32 const createdBy = pet->GetUInt32Value(UNIT_CREATED_BY_SPELL))
+        return IsBorrowedSpell(player, createdBy);
+    return pet->getPetType() == HUNTER_PET && player->getClass() != CLASS_HUNTER;
+}
+
+std::string PetOwnerState(Player const* player)
+{
+    if (!player->GetPet())
+        return "PETOWNER -";
+    return PetFromSubclass(player) ? "PETOWNER brother" : "PETOWNER main";
+}
+
+void DismissPetUnlessKnown(Player* player, bool fromSubclass)
+{
+    Pet* pet = player->GetPet();
+    if (!pet)
+        return;
+    uint32 const createdBy = pet->GetUInt32Value(UNIT_CREATED_BY_SPELL);
+    if (fromSubclass || (createdBy && !player->HasSpell(createdBy)))
+        player->RemovePet(pet, PET_SAVE_NOT_IN_SLOT, false);
+}
+
 uint32 ApplyChoice(Player* player, Subclass::Choice const& wanted)
 {
     Record record = RecordOf(player);
+    bool const subclassChanged = record.Choice.SubClass && record.Choice.SubClass != wanted.SubClass;
+    bool const petFromSubclass = subclassChanged && PetFromSubclass(player);
     uint32 removed = record.Choice == wanted ? 0 : ForgetBorrowedTrees(player, record.Choice);
-    if (record.Choice.SubClass && record.Choice.SubClass != wanted.SubClass)
+    if (subclassChanged)
     {
         removed += ForgetBorrowedBaseSpells(player, record.Choice.SubClass);
         ForgetBorrowedSkillLines(player, record.Choice.SubClass);
+        DismissPetUnlessKnown(player, petFromSubclass);
     }
     record.Choice = wanted;
     StoreRecord(player, record);
     LendRunes(player);
     SyncBorrowedBaseSpells(player);
+    ForgetStrayBorrowedCopies(player);
     RefreshPowerPools(player);
     if (uint32 const active = GetAscensionActiveSpecialization(player))
         SwitchAscensionSpecialization(player, active);
     GrantSpecializationPresets(player);
     SendSubclassState(player);
+    SendAddon(player, PetOwnerState(player));
     return removed;
 }
 
@@ -1970,7 +2142,8 @@ std::string Describe(Subclass::Choice const& choice)
 
 bool OffersQuest(Player const* player)
 {
-    if (!MainMaySubclass(player->getClass()) || LonelyTwin(player))
+    if (!MainMaySubclass(player->getClass()) || LonelyTwin(player) ||
+        Subclass::IsTwoPlayersBody(player->getRace(true), StoryGenderOf(player)))
         return false;
     Record const record = RecordOf(player);
     Subclass::Settings const current = SettingsOf(player);
@@ -2214,7 +2387,9 @@ public:
             sConfigMgr->GetOption<uint32>("Subclass.HeroRaces.RequiredLevel", 60), STRONG_MAX_LEVEL));
         thinHumanEnabled = loaded.ThinHuman;
         twoHeadedOgreEnabled = loaded.TwoHeadedOgre;
+        twoPlayersEnabled = sConfigMgr->GetOption<bool>("Subclass.TwoPlayers.Enable", true);
         forceBots = loaded.ForceBots;
+        anyRaceBots = sConfigMgr->GetOption<bool>("Subclass.Bots.AnyRace", false);
         travelFormsWholeBody = loaded.TravelFormsWholeBody;
         brotherMirrorDisplay = loaded.BrotherMirrorDisplay;
         std::lock_guard<std::mutex> lock(subclassMutex);
@@ -2233,7 +2408,7 @@ public:
 bool ForcedBot(Player const* player)
 {
     WorldSession const* session = player->GetSession();
-    return forceBots && session && session->IsBot();
+    return forceBots && session && session->IsBot() && !TwoPlayersPartnerOf(player->GetGUID().GetCounter());
 }
 
 bool SubclassEligible(Player const* player)
@@ -3000,6 +3175,7 @@ public:
         LearnStandardMainWeaponSkills(player);
         LendRunes(player);
         SyncBorrowedBaseSpells(player);
+        ForgetStrayBorrowedCopies(player);
         if (SubclassRaceEnabled(player->getRace()))
             DropUnwieldedGearSkills(player);
         RefreshPowerPools(player);
@@ -3556,6 +3732,11 @@ uint32 BrotherMirrorDisplay()
     return brotherMirrorDisplay;
 }
 
+bool TwoPlayersEnabled()
+{
+    return twoPlayersEnabled && CurrentSettings().Enabled;
+}
+
 bool SubclassRaceEnabled(uint8 race)
 {
     if (race == Subclass::ThinHumanRace)
@@ -3685,8 +3866,11 @@ bool AllowsCreation(WorldSession* session, WorldPacket const& packet)
     reader.rpos(0);
     std::string name;
     uint8 race = 0;
-    reader >> name >> race;
-    ResponseCodes refusal = SubclassRaceEnabled(race) ? CHAR_CREATE_SUCCESS : CHAR_CREATE_DISABLED;
+    uint8 classId = 0;
+    uint8 gender = 0;
+    reader >> name >> race >> classId >> gender;
+    bool const raceAllowed = SubclassRaceEnabled(race) && (twoPlayersEnabled || !Subclass::IsTwoPlayersBody(race, gender));
+    ResponseCodes refusal = raceAllowed ? CHAR_CREATE_SUCCESS : CHAR_CREATE_DISABLED;
     if (refusal == CHAR_CREATE_SUCCESS && (race == Subclass::ThinHumanRace || race == Subclass::TwoHeadedOgreRace))
     {
         Subclass::Settings const current = CurrentSettings();
@@ -3734,6 +3918,7 @@ public:
         {
             SendSubclassesToCharacterSelect(session);
             SendTwinGearToCharacterSelect(session);
+            SendMutatedToCharacterSelect(session);
         }
         return !session || (AllowsCreation(session, packet) && KeepsRelicOutOfBank(session, packet));
     }
@@ -3808,4 +3993,23 @@ void AddSC_mod_subclass()
         else
             Subclass::AddBonusPoints(settings, borrowsClassTree, classPoints, specializationPoints);
     });
+}
+
+Subclass::SpecializationRoles RolesOfSpecialization(uint16 specialization)
+{
+    std::lock_guard<std::mutex> lock(subclassMutex);
+    auto const found = specializationRoles.find(specialization);
+    return found == specializationRoles.end() ? Subclass::SpecializationRoles{} : found->second;
+}
+
+Subclass::SpecializationRoles RolesOfClass(uint8 classId)
+{
+    std::lock_guard<std::mutex> lock(subclassMutex);
+    auto const found = classRoles.find(classId);
+    return found == classRoles.end() ? Subclass::SpecializationRoles{} : found->second;
+}
+
+std::string PairClassLabel(uint8 classId)
+{
+    return ClassColorHex(classId) + " " + PlainClassName(classId);
 }

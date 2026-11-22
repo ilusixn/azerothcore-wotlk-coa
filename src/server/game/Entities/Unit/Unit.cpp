@@ -3805,6 +3805,11 @@ SpellMissInfo Unit::MeleeSpellHitResult(Unit* victim, SpellInfo const* spellInfo
     uint32 missChance = uint32(MeleeSpellMissChance(victim, attType, skillDiff, spellInfo->Id) * 100.0f);
     if (IsPlayer() && getClass() == CLASS_STARCALLER && HasAura(802203))
         missChance = 0;
+    {
+        int32 scriptedMissChance = int32(missChance);
+        sScriptMgr->ModifySpellMissChance(this, victim, spellInfo, scriptedMissChance);
+        missChance = uint32(std::max(0, scriptedMissChance));
+    }
     // Roll miss
     uint32 tmp = missChance;
     if (roll < tmp)
@@ -4064,6 +4069,8 @@ SpellMissInfo Unit::MagicSpellHitResult(Unit* victim, SpellInfo const* spellInfo
     int32 tmp = 10000 - HitChance;
     if (IsPlayer() && getClass() == CLASS_STARCALLER && HasAura(802203))
         tmp = 0;
+    sScriptMgr->ModifySpellMissChance(this, victim, spellInfo, tmp);
+    tmp = std::max(0, tmp);
 
     int32 rand = irand(1, 10000); // Needs to be  1 to 10000 to avoid the 1/10000 chance to miss on 100% hit rating
 
@@ -6578,10 +6585,11 @@ AuraEffect* Unit::GetAuraEffect(uint32 spellId, uint8 effIndex, ObjectGuid caste
             return itr->second->GetBase()->GetEffect(effIndex);
         }
     }
+    if (uint32 const twin = SpellMgr::GetScriptTwinOf(spellId))
+        if (auto result = GetAuraEffect(twin, effIndex, caster))
+            return result;
     if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
         return GetAuraEffect(copy, effIndex, caster);
-    if (uint32 const twin = SpellMgr::GetScriptTwinOf(spellId))
-        return GetAuraEffect(twin, effIndex, caster);
     return nullptr;
 }
 
@@ -6766,10 +6774,11 @@ bool Unit::HasAuraEffect(uint32 spellId, uint8 effIndex, ObjectGuid caster) cons
             return true;
         }
     }
+    if (uint32 const twin = SpellMgr::GetScriptTwinOf(spellId))
+        if (auto result = HasAuraEffect(twin, effIndex, caster))
+            return result;
     if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
         return HasAuraEffect(copy, effIndex, caster);
-    if (uint32 const twin = SpellMgr::GetScriptTwinOf(spellId))
-        return HasAuraEffect(twin, effIndex, caster);
     return false;
 }
 
@@ -6786,11 +6795,11 @@ uint32 Unit::GetAuraCount(uint32 spellId) const
             count += (uint32)itr->second->GetBase()->GetStackAmount();
     }
 
+    if (uint32 const twin = SpellMgr::GetScriptTwinOf(spellId))
+        count += GetAuraCount(twin);
     if (!count)
         if (uint32 copy = GetAscensionSpellCopy(spellId)) // Bronzebeard copy (vanilla classes)
             return GetAuraCount(copy);
-    if (uint32 const twin = SpellMgr::GetScriptTwinOf(spellId))
-        count += GetAuraCount(twin);
     return count;
 }
 
@@ -11805,10 +11814,11 @@ void Unit::Mount(uint32 mount, uint32 VehicleId, uint32 creatureEntry)
         sScriptMgr->AnticheatSetUnderACKmount(player);
 
         // mount as a vehicle
-        if (VehicleId)
+        if (VehicleId && !sScriptMgr->OnPlayerKeepsOwnVehicle(player))
         {
             if (CreateVehicleKit(VehicleId, creatureEntry))
             {
+                GetVehicleKit()->MarkMountKit();
                 GetVehicleKit()->Reset();
 
                 // Send others that we now have a vehicle
@@ -11878,8 +11888,8 @@ void Unit::Dismount()
     data << GetPackGUID();
     SendMessageToSet(&data, true);
 
-    // dismount as a vehicle
-    if (IsPlayer() && GetVehicleKit())
+    // dismount as a vehicle; a vehicle kit the mount did not create stays
+    if (IsPlayer() && GetVehicleKit() && GetVehicleKit()->IsMountKit())
     {
         // Send other players that we are no longer a vehicle
         data.Initialize(SMSG_PLAYER_VEHICLE_DATA, 8 + 4);
@@ -12185,7 +12195,8 @@ bool Unit::_IsValidAssistTarget(Unit const* target, SpellInfo const* bySpell) co
         return false;
 
     // can't assist own vehicle or passenger
-    if (m_vehicle)
+    // A player carrying players (a shared body or a passenger mount) stays a friendly player to them.
+    if (m_vehicle && !m_vehicle->GetBase()->IsPlayer())
         if (IsOnVehicle(target) || m_vehicle->GetBase()->IsOnVehicle(target))
             return false;
 
@@ -18722,29 +18733,12 @@ uint8 Unit::getRace(bool original) const
 uint32 Unit::getRaceMask() const
 {
     uint8 const race = getRace(true);
-    switch (race)
-    {
-        case 12: case 13: case 15: case 16: case 18: case 20: case 22: case 27: case 30:
-        case 32: case 47: case 50: case 65: case 71: case 79: case 80: case 82: case 96: case 103:
-            return 1u << (RACE_HUMAN - 1);
-        case 19: case 21: case 23: case 24: case 25: case 26: case 28: case 29: case 31:
-        case 49: case 51: case 53: case 55: case 56: case 57: case 58: case 69: case 70:
-        case 74: case 83: case 85: case 86: case 87: case 89: case 98: case 104:
-            return 1u << (RACE_ORC - 1);
-        case 48: case 67: case 68:
-            return 1u << (RACE_DWARF - 1);
-        case 14: case 54: case 59: case 61: case 62: case 75: case 97: case 99:
-        case 100: case 107: case 109: case 110:
-            return 1u << (RACE_NIGHTELF - 1);
-        case 60: case 63: case 81: case 84: case 90: case 101:
-            return 1u << (RACE_UNDEAD_PLAYER - 1);
-        case 17: case 66: case 102: case 106: case 112:
-            return 1u << (RACE_TAUREN - 1);
-        default:
-            break;
-    }
     if (!race)
         return 0;
+    // quests / items / skill lines / conditions: the vanilla race whose start zone this race uses (ObjectMgr::LoadHomeRaces;
+    // replaced a hand-written list that had e.g. Zandalari as Human and missed every race added since)
+    if (uint8 const home = sObjectMgr->GetHomeRace(race))
+        return 1u << (home - 1);
     return 1u << ((race - 1) & 31);
 }
 

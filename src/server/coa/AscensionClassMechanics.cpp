@@ -1,13 +1,13 @@
 /* Copyright (C) 2016+ AzerothCore, GNU AGPL v3. */
 
 #include "AscensionClassMechanics.h"
-#include "AscensionSpecialization.h"
 #include "AscensionBarbarian.h"
 #include "AscensionClassMechanics12To17.h"
 #include "AscensionClassMechanics19To25.h"
 #include "AscensionClassMechanics26To32.h"
 #include "AscensionRangerDamage.h"
 #include "AscensionRangerTalents.h"
+#include "AscensionSpecialization.h"
 #include "AscensionWitchHunterTonics.h"
 #include "AscensionWitchHunterFlames.h"
 #include "AscensionWitchHunterScaling.h"
@@ -37,6 +37,7 @@
 #include "AscensionRunemasterZenith.h"
 #include "AscensionTemplarLibrams.h"
 #include "AscensionHealingStatSelectors.h"
+#include "AscensionNightmareDamageTaken.h"
 #include "AscensionHeroWarrior.h"
 #include "AscensionGuardianResources.h"
 #include "AscensionSpellProgressionData.h"
@@ -1158,6 +1159,7 @@ void ApplyAscensionClassMechanics(SpellInfo* spellInfo)
     ApplyAscensionRunemasterZenithContracts(spellInfo);
     ApplyAscensionTemplarLibramContracts(spellInfo);
     ApplyAscensionHealingStatSelectorContracts(spellInfo);
+    ApplyAscensionNightmareDamageTakenContracts(spellInfo);
     ApplyAdditionalTargetContracts(spellInfo);
     ApplyRangerOffensiveSpellContracts(spellInfo);
     ApplyRangerForestDwellerContract(spellInfo);
@@ -1252,7 +1254,7 @@ void SynchronizeAscensionClassMechanics(Player* player)
         else
             RemoveGuardianFormationHelpers(player);
     }
-    else if (UsesAscensionClassMechanics(player, CLASS_RANGER))
+    if (UsesAscensionClassMechanics(player, CLASS_RANGER))
     {
         SynchronizeRangerQuiver(player);
         if (player->HasAura(SPELL_RANGER_ELUDE))
@@ -1303,6 +1305,66 @@ void HandleAscensionClassMechanicsCalculatedTarget(Spell* spell, Player* player,
         targetInfo);
 }
 
+static void HandleGuardianSpellHit(Spell* spell, Player* player, Unit* target, uint32 spellId,
+    std::uint32_t damage, bool critical)
+{
+    if (IsGuardianCenturionStrike(spellId) &&
+        IsSwordSubclass(GetMainHandWeaponSubclass(player)) &&
+        target == spell->GetOriginalTarget() &&
+        spell->TryMarkScriptEventHandled(GUARDIAN_CENTURION_SWORD_EVENT))
+    {
+        player->CastSpell(player,
+            SPELL_GUARDIAN_CENTURION_SWORD_ATTACKS, true);
+    }
+
+    if (IsGuardianCenturionStrike(spellId) && damage &&
+        GetMainHandWeaponSubclass(player) == ITEM_SUBCLASS_WEAPON_POLEARM &&
+        target == spell->GetOriginalTarget() &&
+        spell->TryMarkScriptEventHandled(GUARDIAN_CENTURION_POLEARM_EVENT))
+    {
+        SpellInfo const* centurion = spell->GetSpellInfo();
+        uint32 const struck = Unit::DealDamage(player, target, damage,
+            nullptr, SPELL_DIRECT_DAMAGE, centurion->GetSchoolMask(),
+            centurion, false);
+        player->SendSpellNonMeleeDamageLog(target, centurion, struck,
+            centurion->GetSchoolMask(), 0, 0, true, 0, critical);
+    }
+
+    if (!damage)
+        return;
+
+    if (IsGuardianRam(spellId))
+    {
+        if (player->HasAura(SPELL_GUARDIAN_NO_ESCAPE) &&
+            target->HasRootAura())
+        {
+            player->CastSpell(player, SPELL_GUARDIAN_NO_ESCAPE_RESET,
+                true);
+        }
+        if (critical && player->HasAura(SPELL_GUARDIAN_PLATE_BUSTER))
+            player->CastSpell(player, SPELL_GUARDIAN_PLATE_BUSTER_RESET,
+                true);
+        if (player->HasAura(SPELL_GUARDIAN_SHOW_OF_FORCE))
+            player->CastSpell(target, SPELL_GUARDIAN_SHOW_OF_FORCE_DISPEL,
+                true);
+        TryGuardianKingsGuardReset(player);
+    }
+    else if (IsGuardianPulverize(spellId))
+        TryGuardianKingsGuardReset(player);
+    else if (IsGuardianHammerOfJustice(spellId) &&
+        player->HasAura(SPELL_GUARDIAN_ORDER_IN_THE_COURT))
+    {
+        player->CastSpell(target,
+            SPELL_GUARDIAN_ORDER_IN_THE_COURT_DEBUFF, true);
+    }
+    else if (IsGuardianSpearThrow(spellId) &&
+        player->HasAura(SPELL_GUARDIAN_PINNED_DOWN))
+    {
+        player->CastSpell(target, SPELL_GUARDIAN_PINNED_DOWN_REFRESH,
+            true);
+    }
+}
+
 void HandleAscensionClassMechanicsHit(Spell* spell, Player* player,
     Unit* target, std::uint8_t missInfo, std::uint32_t damage,
     std::uint32_t, bool critical)
@@ -1321,79 +1383,20 @@ void HandleAscensionClassMechanicsHit(Spell* spell, Player* player,
         return;
 
     uint32 spellId = spell->GetSpellInfo()->Id;
-    if (UsesAscensionClassMechanics(player, CLASS_RANGER))
+    bool usesRangerMechanics = UsesAscensionClassMechanics(player, CLASS_RANGER);
+    if (usesRangerMechanics)
         HandleRangerBountyHunterHit(player, target, spellId, damage);
 
     if (spell->IsTriggered())
         return;
 
     if (UsesAscensionClassMechanics(player, CLASS_GUARDIAN))
-    {
-        if (IsGuardianCenturionStrike(spellId) &&
-            IsSwordSubclass(GetMainHandWeaponSubclass(player)) &&
-            target == spell->GetOriginalTarget() &&
-            spell->TryMarkScriptEventHandled(GUARDIAN_CENTURION_SWORD_EVENT))
-        {
-            player->CastSpell(player,
-                SPELL_GUARDIAN_CENTURION_SWORD_ATTACKS, true);
-        }
-
-        if (IsGuardianCenturionStrike(spellId) && damage &&
-            GetMainHandWeaponSubclass(player) == ITEM_SUBCLASS_WEAPON_POLEARM &&
-            target == spell->GetOriginalTarget() &&
-            spell->TryMarkScriptEventHandled(GUARDIAN_CENTURION_POLEARM_EVENT))
-        {
-            SpellInfo const* centurion = spell->GetSpellInfo();
-            uint32 const struck = Unit::DealDamage(player, target, damage,
-                nullptr, SPELL_DIRECT_DAMAGE, centurion->GetSchoolMask(),
-                centurion, false);
-            player->SendSpellNonMeleeDamageLog(target, centurion, struck,
-                centurion->GetSchoolMask(), 0, 0, true, 0, critical);
-        }
-
-        if (!damage)
-            return;
-
-        if (IsGuardianRam(spellId))
-        {
-            if (player->HasAura(SPELL_GUARDIAN_NO_ESCAPE) &&
-                target->HasRootAura())
-            {
-                player->CastSpell(player, SPELL_GUARDIAN_NO_ESCAPE_RESET,
-                    true);
-            }
-            if (critical && player->HasAura(SPELL_GUARDIAN_PLATE_BUSTER))
-                player->CastSpell(player, SPELL_GUARDIAN_PLATE_BUSTER_RESET,
-                    true);
-            if (player->HasAura(SPELL_GUARDIAN_SHOW_OF_FORCE))
-                player->CastSpell(target, SPELL_GUARDIAN_SHOW_OF_FORCE_DISPEL,
-                    true);
-            TryGuardianKingsGuardReset(player);
-        }
-        else if (IsGuardianPulverize(spellId))
-            TryGuardianKingsGuardReset(player);
-        else if (IsGuardianHammerOfJustice(spellId) &&
-            player->HasAura(SPELL_GUARDIAN_ORDER_IN_THE_COURT))
-        {
-            player->CastSpell(target,
-                SPELL_GUARDIAN_ORDER_IN_THE_COURT_DEBUFF, true);
-        }
-        else if (IsGuardianSpearThrow(spellId) &&
-            player->HasAura(SPELL_GUARDIAN_PINNED_DOWN))
-        {
-            player->CastSpell(target, SPELL_GUARDIAN_PINNED_DOWN_REFRESH,
-                true);
-        }
-        return;
-    }
+        HandleGuardianSpellHit(spell, player, target, spellId, damage, critical);
 
     if (UsesAscensionClassMechanics(player, CLASS_CULTIST) && IsCultistTwilightShieldtoss(spellId))
-    {
         player->CastSpell(target, SPELL_CULTIST_TWILIGHT_SHIELDTOSS_SLOW, true);
-        return;
-    }
 
-    if (!UsesAscensionClassMechanics(player, CLASS_RANGER))
+    if (!usesRangerMechanics)
         return;
 
     HandleRangerQuiverHit(player, target, spell->GetSpellInfo(), damage);
@@ -1403,54 +1406,8 @@ void HandleAscensionClassMechanicsHit(Spell* spell, Player* player,
         AddRangerAdvantage(player, 1);
 }
 
-void HandleAscensionClassMechanicsCast(Spell* spell)
+static void HandleGuardianSpellCast(Player* player, SpellInfo const* info)
 {
-    HandleAscensionGuardianResourceCast(spell);
-    HandleAscensionBarbarianCast(spell);
-    if (!spell || spell->IsTriggered())
-        return;
-    Player* player = spell->GetCaster()->ToPlayer();
-    if (!player)
-        return;
-
-    SpellInfo const* info = spell->GetSpellInfo();
-    if (player->getClass() == CLASS_WARLOCK && info->Id == 217364 &&
-        !player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
-    {
-        if (Unit* target = spell->GetOriginalTarget())
-            player->CastSpell(target, 281295, true);
-    }
-    if (UsesAscensionClassMechanics(player, CLASS_RANGER))
-        HandleRangerAdvantageCast(spell, player);
-
-    if (UsesAscensionClassMechanics(player, CLASS_RANGER) &&
-        info->CasterAuraSpell == SPELL_RANGER_ADVANTAGE)
-    {
-        if (!DidRangerAdvantageConsumerSucceed(spell, player))
-            return;
-
-        HandleAscensionRangerStonemason(spell, player);
-        HandleAscensionRangerPhoenixPlumes(spell, player);
-
-        uint8 spent = 0;
-        if (Aura const* advantage = player->GetAura(SPELL_RANGER_ADVANTAGE))
-            spent = advantage->GetStackAmount();
-        HandleRangerMaximumPower(player, spent);
-
-        float consumeChance = 100.0f;
-        player->ApplySpellMod(SPELL_RANGER_ADVANTAGE_DECREMENT_PASSIVE,
-            SPELLMOD_CHANCE_OF_SUCCESS, consumeChance, spell);
-        if (roll_chance_f(consumeChance))
-        {
-            player->CastSpell(player, SPELL_RANGER_ADVANTAGE_DECREMENT, true);
-            HandleRangerAdvantageSpent(player, spent);
-        }
-        return;
-    }
-
-    if (!UsesAscensionClassMechanics(player, CLASS_GUARDIAN))
-        return;
-
     uint32 firstRank = sSpellMgr->GetFirstSpellInChain(info->Id);
     if (firstRank == 800316)
     {
@@ -1530,6 +1487,55 @@ void HandleAscensionClassMechanicsCast(Spell* spell)
 
     if (IsGuardianCenturionStrike(info->Id))
         RemoveGuardianCenturionWeaponEffects(player);
+}
+
+void HandleAscensionClassMechanicsCast(Spell* spell)
+{
+    HandleAscensionGuardianResourceCast(spell);
+    HandleAscensionBarbarianCast(spell);
+    if (!spell || spell->IsTriggered())
+        return;
+    Player* player = spell->GetCaster()->ToPlayer();
+    if (!player)
+        return;
+
+    SpellInfo const* info = spell->GetSpellInfo();
+    if (player->getClass() == CLASS_WARLOCK && info->Id == 217364 &&
+        !player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+    {
+        if (Unit* target = spell->GetOriginalTarget())
+            player->CastSpell(target, 281295, true);
+    }
+    if (UsesAscensionClassMechanics(player, CLASS_GUARDIAN))
+        HandleGuardianSpellCast(player, info);
+
+    if (!UsesAscensionClassMechanics(player, CLASS_RANGER))
+        return;
+
+    HandleRangerAdvantageCast(spell, player);
+
+    if (info->CasterAuraSpell == SPELL_RANGER_ADVANTAGE)
+    {
+        if (!DidRangerAdvantageConsumerSucceed(spell, player))
+            return;
+
+        HandleAscensionRangerStonemason(spell, player);
+        HandleAscensionRangerPhoenixPlumes(spell, player);
+
+        uint8 spent = 0;
+        if (Aura const* advantage = player->GetAura(SPELL_RANGER_ADVANTAGE))
+            spent = advantage->GetStackAmount();
+        HandleRangerMaximumPower(player, spent);
+
+        float consumeChance = 100.0f;
+        player->ApplySpellMod(SPELL_RANGER_ADVANTAGE_DECREMENT_PASSIVE,
+            SPELLMOD_CHANCE_OF_SUCCESS, consumeChance, spell);
+        if (roll_chance_f(consumeChance))
+        {
+            player->CastSpell(player, SPELL_RANGER_ADVANTAGE_DECREMENT, true);
+            HandleRangerAdvantageSpent(player, spent);
+        }
+    }
 }
 
 void HandleAscensionClassMechanicsBlock(Player* player)

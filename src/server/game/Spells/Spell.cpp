@@ -3190,7 +3190,14 @@ SpellMissInfo Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask, bool scaleA
     }
 
     if (m_caster != unit && m_caster->IsHostileTo(unit) && !m_spellInfo->IsPositive() && !m_triggeredByAuraSpell && !m_spellInfo->HasAttribute(SPELL_ATTR0_CU_DONT_BREAK_STEALTH))
-        unit->RemoveAurasByType(SPELL_AURA_MOD_STEALTH);
+    {
+        if (unit->HasAuraType(SPELL_AURA_MOD_STEALTH))
+            unit->RemoveAppliedAuras([](AuraApplication const* aurApp)
+            {
+                SpellInfo const* auraInfo = aurApp->GetBase()->GetSpellInfo();
+                return auraInfo->HasAura(SPELL_AURA_MOD_STEALTH) && !auraInfo->StealthSurvivesSpellHits;
+            });
+    }
 
     if (aura_effmask)
     {
@@ -7343,7 +7350,11 @@ SpellCastResult Spell::CheckRange(bool strict)
             else if (!targetIsVehicleBase && !m_caster->IsWithinCombatRange(target, max_range))
                 return SPELL_FAILED_OUT_OF_RANGE; //0x5A;
 
-            if (!targetIsVehicleBase && m_caster->IsPlayer() && (m_spellInfo->FacingCasterFlags & SPELL_FACING_FLAG_INFRONT) && !m_caster->HasInArc(static_cast<float>(M_PI), target) && !m_caster->IsWithinBoundaryRadius(target))
+            // A player seated on another player (a shared body or a passenger mount) cannot turn on its
+            // own and its stored facing trails the driver's, so facing is not required of it.
+            bool const ridesAPlayer = m_caster->GetVehicleBase() && m_caster->GetVehicleBase()->IsPlayer();
+
+            if (!targetIsVehicleBase && !ridesAPlayer && m_caster->IsPlayer() && (m_spellInfo->FacingCasterFlags & SPELL_FACING_FLAG_INFRONT) && !m_caster->HasInArc(static_cast<float>(M_PI), target) && !m_caster->IsWithinBoundaryRadius(target))
                 return SPELL_FAILED_UNIT_NOT_INFRONT;
         }
 
@@ -7531,8 +7542,8 @@ SpellCastResult Spell::CheckItems(uint32* param1, uint32* param2)
     else
     {
         // Xinef: this is not true in my opinion, in eg bladestorm will not be canceled after disarm
-        //if (!HasTriggeredCastFlag(TRIGGERED_IGNORE_EQUIPPED_ITEM_REQUIREMENT))
-        if (m_caster->IsPlayer() && !m_caster->ToPlayer()->HasItemFitToSpellRequirements(m_spellInfo))
+        if (!HasTriggeredCastFlag(TRIGGERED_IGNORE_EQUIPPED_ITEM_REQUIREMENT) && m_caster->IsPlayer() &&
+            !m_caster->ToPlayer()->HasItemFitToSpellRequirements(m_spellInfo))
             return SPELL_FAILED_EQUIPPED_ITEM_CLASS;
     }
 
@@ -7909,7 +7920,11 @@ SpellCastResult Spell::CheckItems(uint32* param1, uint32* param2)
 
                     Item* pItem = m_caster->ToPlayer()->GetWeaponForAttack(m_attackType);
                     if (!pItem || pItem->IsBroken())
+                    {
+                        if (HasTriggeredCastFlag(TRIGGERED_IGNORE_EQUIPPED_ITEM_REQUIREMENT))
+                            break;
                         return SPELL_FAILED_EQUIPPED_ITEM;
+                    }
 
                     // Keep the real ranged-weapon/broken-item checks above.
                     // Custom classes and Hero do not require or consume projectile stacks.
@@ -7998,10 +8013,12 @@ SpellCastResult Spell::CheckItems(uint32* param1, uint32* param2)
     }
 
     // check weapon presence in slots for main/offhand weapons
-    if (/*never skip those checks !HasTriggeredCastFlag(TRIGGERED_IGNORE_EQUIPPED_ITEM_REQUIREMENT) &&*/ m_spellInfo->EquippedItemClass >= 0)
+    if (m_spellInfo->EquippedItemClass >= 0)
     {
+        bool const checkHands = !HasTriggeredCastFlag(TRIGGERED_IGNORE_EQUIPPED_ITEM_REQUIREMENT);
+
         // main hand weapon required
-        if (m_spellInfo->HasAttribute(SPELL_ATTR3_REQUIRES_MAIN_HAND_WEAPON))
+        if (checkHands && m_spellInfo->HasAttribute(SPELL_ATTR3_REQUIRES_MAIN_HAND_WEAPON))
         {
             Item* item = m_caster->ToPlayer()->GetWeaponForAttack(BASE_ATTACK);
 
@@ -8015,7 +8032,7 @@ SpellCastResult Spell::CheckItems(uint32* param1, uint32* param2)
         }
 
         // offhand hand weapon required
-        if (m_spellInfo->HasAttribute(SPELL_ATTR3_REQUIRES_OFF_HAND_WEAPON))
+        if (checkHands && m_spellInfo->HasAttribute(SPELL_ATTR3_REQUIRES_OFF_HAND_WEAPON))
         {
             Item* item = m_caster->ToPlayer()->GetWeaponForAttack(OFF_ATTACK);
 

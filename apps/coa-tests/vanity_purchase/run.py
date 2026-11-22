@@ -268,7 +268,7 @@ int main()
         ascensionCompatConfig.unlockAll=false;
     }
     {
-        Case c; c.cosmetics.state->OwnedVanityItems.insert(SCROLL);
+        Case c; c.cosmetics.collectionState->OwnedVanityItems.insert(SCROLL);
         c.Buy(SCROLL); assert(c.player.bags[SCROLL]==1 && c.Tokens()==40 && c.player.announced==1 && c.player.created.back().bound);
         c.Buy(SCROLL); assert(c.player.bags[SCROLL]==1 && c.Tokens()==40 && c.Said()=="You do not have enough Bazaar Tokens.");
         assert(c.cosmetics.collected.empty());

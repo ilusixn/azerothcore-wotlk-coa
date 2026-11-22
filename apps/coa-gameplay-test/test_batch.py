@@ -86,7 +86,35 @@ def append_line(path, line):
 
 
 def log(name, value):
-    append_line(Path(__file__).with_name(name), json.dumps(value))
+    path = Path(__file__).with_name(name)
+    with open(str(path) + '.lock', 'a+b') as guard:
+        guard.seek(0)
+        if os.name == 'nt':
+            import errno
+            import msvcrt
+            deadline = time.monotonic() + 10
+            while True:
+                try:
+                    msvcrt.locking(guard.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as error:
+                    if error.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK) or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.001)
+        else:
+            import fcntl
+            fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            row = (json.dumps(value) + '\n').encode('utf-8')
+            with open(path, 'ab', buffering=0) as stream:
+                if stream.write(row) != len(row):
+                    raise OSError('Incomplete event record')
+        finally:
+            if os.name == 'nt':
+                guard.seek(0)
+                msvcrt.locking(guard.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(guard, fcntl.LOCK_UN)
 
 
 def listen():
@@ -887,6 +915,15 @@ class BatchTests(unittest.TestCase):
         self.assertEqual([case.key for case in batch.longest_first(cases)], ['crash', 'hang', 'beta', 'alpha'])
         cases[0].exclusive = True
         self.assertEqual([case.key for case in batch.longest_first(cases)], ['alpha', 'crash', 'hang', 'beta'])
+
+    def test_only_a_simulated_batch_admits_an_exploratory_case_beyond_the_real_clock_cap(self):
+        probe = self.path / 'long.json'
+        self.write(probe, {**SCENARIOS['alpha'], 'contract': 'Half an hour of game time', 'timeout_ms': 1900000})
+        cases = batch.select_cases([str(probe)], self.definitions, clock=batch.SIMULATED_CLOCK)
+        self.assertEqual([case.timeout_seconds for case in cases], [1900.0])
+        for clock in ({'clock': batch.REAL_CLOCK}, {}):
+            with self.assertRaisesRegex(ValueError, 'too large'):
+                batch.select_cases([str(probe)], self.definitions, **clock)
 
     def test_simulated_lanes_run_cases_concurrently_with_write_ahead(self):
         code, result = self.simulated('--lanes', '2', '--scenario', *SLOW, 'beta')

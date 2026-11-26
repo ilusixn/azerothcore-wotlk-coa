@@ -1965,8 +1965,9 @@ uint32 ForgetStrayBorrowedCopies(Player* player)
 {
     std::vector<uint32> stray;
     for (auto const& [spellId, known] : player->GetSpellMap())
+        // a vanilla class (1-11) learns its own class spells at the Book as these copies: only another class's copy is stray
         if (known->State != PLAYERSPELL_REMOVED && spellId > BookCopyOffset && BookCopies().contains(spellId) &&
-            !IsBorrowedSpell(player, spellId - BookCopyOffset))
+            !IsBorrowedSpell(player, spellId - BookCopyOffset) && !player->IsSpellFitByClassAndRace(spellId))
             stray.push_back(spellId);
     if (player->HasSpell(StockAutoShot) && player->getClass() != CLASS_HUNTER &&
         !IsBorrowedSpell(player, StockAutoShot) && !OwnClassGrants(player, StockAutoShot))
